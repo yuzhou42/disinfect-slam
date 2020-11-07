@@ -59,11 +59,26 @@ To run with ZED SDK (CUDA and ZED SDK is required)
 This section is still WIP
 
 ## Running ROS
-```bash
-rosrun disinfslam ros_disinf_slam 
-debug mode: rosrun --prefix 'gdb -ex run --args' disinfslam ros_disinf_slam 
+### installtion
+1. [rviz_visual_tools](https://github.com/PickNikRobotics/rviz_visual_tools.git)
+2. [TSDF2Mesh](https://github.com/yuzhou42/TSDF2Mesh.git)
+### setup
+- add libtorch
 ```
+ln -s /path_to_torchlib thrid_party/libtorch
+```
+- set paths in launch/disinfslam.launch
 
+- compile
+```bash
+catkin build -DCMAKE_PREFIX_PATH=$HOME/.local  -DCMAKE_BUILD_TYPE=Release
+
+```
+### Running
+```bash
+roslaunch disinfslam disinfslam.launch 
+
+```
 ## TODO
 
 - Add logic to not update TSDF when tracking is lost
