@@ -6,7 +6,7 @@
 #include "utils/tsdf/voxel_types.cuh"
 #include "utils/cuda/vector.cuh"
 
-#define NUM_BLOCK_BITS    18
+#define NUM_BLOCK_BITS    12
 #define NUM_BLOCK         (1 << NUM_BLOCK_BITS)
 
 #define BLOCK_LEN_BITS    3

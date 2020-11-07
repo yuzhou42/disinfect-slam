@@ -10,7 +10,7 @@ DISINFSystem::DISINFSystem(
     std::shared_ptr<openvslam::config> cfg = get_and_set_config(camera_config_path);
     SLAM_ = std::make_shared<SLAMSystem>(cfg, vocab_path);
     SEG_ = std::make_shared<inference_engine>(seg_model_path);
-    TSDF_ = std::make_shared<TSDFSystem>(0.01, 0.06, 4,
+    TSDF_ = std::make_shared<TSDFSystem>(0.05, 0.1, 4,
         get_intrinsics_from_file(camera_config_path), get_extrinsics_from_file(camera_config_path));
 
     SLAM_->startup();
