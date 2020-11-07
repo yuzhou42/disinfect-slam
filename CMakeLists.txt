@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.11)
 
 project(disinfslam LANGUAGES CXX C)
+# set(CMAKE_BUILD_TYPE Debug)
 include(CheckLanguage)
 check_language(CUDA)
 if (CMAKE_CUDA_COMPILER)
@@ -16,10 +17,24 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+find_package(catkin REQUIRED COMPONENTS
+    roscpp
+    rospy
+    geometry_msgs
+    nodelet
+    sensor_msgs
+    std_msgs
+    tf2_geometry_msgs
+    tf2_ros
+    cv_bridge
+    shape_msgs
+)
+
 # OpenGL
 find_package(GLEW REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(GLUT REQUIRED)
 find_package(OpenGL REQUIRED)
 # Slam
 find_package(openvslam REQUIRED)
@@ -38,14 +53,22 @@ if (NOT Torch_FOUND)
 endif()
 
 # enable testing
-enable_testing()
-include(GoogleTest)
+# enable_testing()
+# include(GoogleTest)
 
 # Compile Flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mtune=native -march=native")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mtune=native -march=native")
 
-include_directories(${CMAKE_SOURCE_DIR})
+catkin_package()
+
+include_directories(
+    ${CMAKE_SOURCE_DIR}
+    ${OpenGL_INCLUDE_DIRS}
+    ${GLUT_INCLUDE_DIRS}
+    ${catkin_INCLUDE_DIRS}
+    ${KLAMPT_INCLUDE_DIRS}
+)
 # Interface wrapper lib for OpenVSLAM
 add_library(openvslam INTERFACE)
 target_link_libraries(openvslam

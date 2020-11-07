@@ -58,6 +58,12 @@ To run with ZED SDK (CUDA and ZED SDK is required)
 
 This section is still WIP
 
+## Running ROS
+```bash
+rosrun disinfslam ros_disinf_slam 
+debug mode: rosrun --prefix 'gdb -ex run --args' disinfslam ros_disinf_slam 
+```
+
 ## TODO
 
 - Add logic to not update TSDF when tracking is lost

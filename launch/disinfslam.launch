@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="disinfslam" type="ros_disinf_slam" name="ros_disinf_slam"  output="screen" >
+    </node>
+</launch>
