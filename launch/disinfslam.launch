@@ -1,4 +1,11 @@
 <launch>
     <node pkg="disinfslam" type="ros_disinf_slam" name="ros_disinf_slam"  output="screen" >
+        <param name="model_path"          value="/home/yu/tools/ht_lt.pt" />
+        <param name="calib_path"          value="$(find disinfslam)/configs/zed_native_l515.yaml" />
+        <param name="orb_vocab_path"      value="/home/yu/Downloads/orb_vocab/orb_vocab.dbow2" />
+        <param name="devid"   type="int"       value="2" />
+        <param name="renderer"   type="bool"       value="false" />
+
     </node>
+    <!-- <include file = "$(find TSDF2Mesh)/launch/tsdf2mesh.launch"/> -->
 </launch>

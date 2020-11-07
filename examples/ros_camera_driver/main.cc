@@ -179,17 +179,24 @@ int main(int argc, char *argv[]) {
   ros::init(argc, argv, "ros_disinf_slam");
   ros::NodeHandle mNh;
   tf2_ros::TransformBroadcaster mTfSlam;
-  auto cfg = get_and_set_config("/home/yu/git_ws/disinfect-slam/configs/zed_native_l515.yaml");
+  std::string model_path, calib_path, orb_vocab_path;
+  int devid;
+  bool renderFlag;
+
+  mNh.getParam("/ros_disinf_slam/model_path", model_path); 
+  mNh.getParam("/ros_disinf_slam/calib_path", calib_path); 
+  mNh.getParam("/ros_disinf_slam/orb_vocab_path", orb_vocab_path); 
+  mNh.param("/ros_disinf_slam/devid", devid, 2);
+  mNh.param("/ros_disinf_slam/renderer", renderFlag, false);
+  // ROS_INFO_STREAM(calib_path);
+
+  auto cfg = get_and_set_config(calib_path);
   // initialize cameras
-  ZEDNative zed_native(*cfg, 2);
+  ZEDNative zed_native(*cfg, devid);
   L515 l515;
-  bool renderFlag = false;
   // initialize slam
   std::shared_ptr<DISINFSystem> my_system = std::make_shared<DISINFSystem>(
-      "/home/yu/git_ws/disinfect-slam/configs/zed_native_l515.yaml",
-                            "/home/yu/Downloads/orb_vocab/orb_vocab.dbow2",
-                            "/home/yu/tools/ht_lt.pt",
-      renderFlag
+      calib_path,orb_vocab_path, model_path, renderFlag
   );
 
   run(zed_native, l515, my_system, mNh, mTfSlam, renderFlag);
