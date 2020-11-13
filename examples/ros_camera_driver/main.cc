@@ -68,8 +68,10 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       my_sys->feed_stereo_frame(img_left, img_right, timestamp);
       ros_stamp.sec = timestamp / 1000;
       ros_stamp.nsec = (timestamp % 1000) * 1000 * 1000;
-      publishImage(mZEDImgLBrg, img_left, mPubZEDImgL, "zed", "bgr8" , ros_stamp);
-      publishImage(mZEDImgRBrg, img_right, mPubZEDImgR, "zed", "bgr8" , ros_stamp);
+      if(mPubZEDImgL.getNumSubscribers()>0)
+        publishImage(mZEDImgLBrg, img_left, mPubZEDImgL, "zed", "bgr8" , ros_stamp);
+      if(mPubZEDImgR.getNumSubscribers()>0)
+        publishImage(mZEDImgRBrg, img_right, mPubZEDImgR, "zed", "bgr8" , ros_stamp);
       ros::spinOnce();
     }
   });
@@ -82,8 +84,10 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp);
       ros_stamp.sec = timestamp / 1000;
       ros_stamp.nsec = (timestamp % 1000) * 1000 * 1000;
-      publishImage(mL515RGBBrg, img_rgb, mPubL515RGB, "l515", "rgb8" , ros_stamp);
-      publishImage(mL515DepthBrg, img_depth, mPubL515Depth, "l515", "mono16", ros_stamp);
+      if(mPubL515RGB.getNumSubscribers()>0)
+        publishImage(mL515RGBBrg, img_rgb, mPubL515RGB, "l515", "rgb8" , ros_stamp);
+      if(mPubL515Depth.getNumSubscribers()>0)
+        publishImage(mL515DepthBrg, img_depth, mPubL515Depth, "l515", "mono16", ros_stamp);
       ros::spinOnce();
     }
   });
@@ -134,32 +138,35 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       stamp.nsec = (t_query % 1000) * 1000 * 1000; //ns
       SE3<float> mSlamPose = my_sys->query_camera_pose(t_query);
       // pubPose(stamp, mSlamPose, mTfSlam);
-      geometry_msgs::TransformStamped transformStamped;
-      transformStamped.header.stamp = stamp;
-      transformStamped.header.frame_id = "world";
-      transformStamped.child_frame_id = "slam";
-      transformStamped.transform.translation.x = mSlamPose.m03;
-      transformStamped.transform.translation.y = mSlamPose.m13;
-      transformStamped.transform.translation.z = mSlamPose.m23;
+      tf2::Transform tf2_trans;
+      tf2::Transform tf2_trans_inv;
 
-      // SO3<float> tran(0, 0, -1, 1, 0, 0, 0, 1,0);
-      // SO3<float> temp = tran*mSlamPose.GetR();
-
-      // tf2::Matrix3x3 R(temp.m00,temp.m01,temp.m02,
-      //                     temp.m10,temp.m11,temp.m12,
-      //                     temp.m20,temp.m21,temp.m22);
       tf2::Matrix3x3 R(mSlamPose.m00,mSlamPose.m01,mSlamPose.m02,
                           mSlamPose.m10,mSlamPose.m11,mSlamPose.m12,
                           mSlamPose.m20,mSlamPose.m21,mSlamPose.m22);
+      tf2::Vector3 T(mSlamPose.m03, mSlamPose.m13, mSlamPose.m23);
 
-      tf2::Quaternion q;
-      // q.setRPY(0, 0, msg->theta);
-      R.getRotation(q);
+      tf2_trans.setBasis(R);
+      tf2_trans.setOrigin(T);
+
+      tf2_trans_inv = tf2_trans.inverse();
+
+      geometry_msgs::TransformStamped transformStamped;
+      transformStamped.header.stamp = stamp;
+      transformStamped.header.frame_id = "slam";
+      transformStamped.child_frame_id = "robot";
+
+      tf2::Quaternion q = tf2_trans_inv.getRotation();
       transformStamped.transform.rotation.x = q.x();
       transformStamped.transform.rotation.y = q.y();
       transformStamped.transform.rotation.z = q.z();
       transformStamped.transform.rotation.w = q.w();
 
+      tf2::Vector3 t = tf2_trans_inv.getOrigin();
+      transformStamped.transform.translation.x = t[0];
+      transformStamped.transform.translation.y = t[1];
+      transformStamped.transform.translation.z = t[2];
+      
       mTfSlam.sendTransform(transformStamped);
       rate.sleep();
     }

@@ -1,4 +1,6 @@
 <launch>
+    <node pkg="tf2_ros" type="static_transform_publisher" name="word_slam" args="0 0 0  0.5, -0.5, 0.5, -0.5  world slam" />
+
     <node pkg="disinfslam" type="ros_disinf_slam" name="ros_disinf_slam"  output="screen" >
         <param name="model_path"          value="/home/yu/tools/ht_lt.pt" />
         <param name="calib_path"          value="$(find disinfslam)/configs/zed_native_l515.yaml" />
