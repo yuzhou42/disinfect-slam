@@ -40,6 +40,8 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
   SE3<float> mSlamPose;
   std::vector<VoxelSpatialTSDF>  mSemanticReconstr;
   std_msgs::Float32MultiArray::Ptr mReconstrMsg(new std_msgs::Float32MultiArray);
+  geometry_msgs::TransformStamped transformStamped;
+
   // publishers
   ros::Publisher mPubL515RGB = mNh.advertise<sensor_msgs::Image>("/l515_rgb", 1);
   ros::Publisher mPubL515Depth = mNh.advertise<sensor_msgs::Image>("/l515_depth", 1);
@@ -102,12 +104,13 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       static float z_range[2] = {-2.0, 4.0};
       static BoundingCube<float> volumn = {
         x_range[0], x_range[1], y_range[0], y_range[1], z_range[0], z_range[1]};
-      static geometry_msgs::TransformStamped transformStamped;
       static ros::Time stamp;
       ros::Rate rate(4);
 
     while (ros::ok()) {
       uint32_t tsdf_global_sub = mPubTsdfGlobal.getNumSubscribers();
+      uint32_t tsdf_local_sub = mPubTsdfLocal.getNumSubscribers();
+
       if(tsdf_global_sub > 0){
         const auto st = get_system_timestamp<std::chrono::milliseconds>();  // nsec
         auto mSemanticReconstr = my_sys->query_tsdf(volumn);
@@ -120,6 +123,25 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
         std::memcpy(&(mReconstrMsg->data[0]), (char*)mSemanticReconstr.data(),  last_query_amount * sizeof(VoxelSpatialTSDF));
         mPubTsdfGlobal.publish(mReconstrMsg);
       }
+
+      if(tsdf_local_sub > 0){
+        const auto st = get_system_timestamp<std::chrono::milliseconds>();  // nsec
+        float x_off = transformStamped.transform.translation.x, y_off = transformStamped.transform.translation.y, z_off = transformStamped.transform.translation.z;
+        std::cout<<"x_off: "<<x_off<<"  y_off: "<<y_off<<"  z_off: "<<z_off<<std::endl; 
+        BoundingCube<float> volumn_local = {
+        x_off + x_range[0], x_off+ x_range[1], y_off + y_range[0], y_off + y_range[1], z_off + z_range[0], z_off + z_range[1]};
+        auto mSemanticReconstr = my_sys->query_tsdf(volumn_local);
+        const auto end = get_system_timestamp<std::chrono::milliseconds>();
+        last_query_time = end - st;
+        last_query_amount = mSemanticReconstr.size();
+        std::cout<<"Last queried %lu voxels "<<last_query_amount<<", took "<< last_query_time<<" ms"<<std::endl;
+        int size = last_query_amount * sizeof(VoxelSpatialTSDF);
+        mReconstrMsg->data.resize(size);
+        std::memcpy(&(mReconstrMsg->data[0]), (char*)mSemanticReconstr.data(),  last_query_amount * sizeof(VoxelSpatialTSDF));
+        mPubTsdfLocal.publish(mReconstrMsg);
+      }
+
+
       ros::spinOnce();
       rate.sleep();
     }
@@ -136,7 +158,7 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       u_int64_t t_query = get_system_timestamp<std::chrono::milliseconds>();
       stamp.sec  = t_query / 1000; //s
       stamp.nsec = (t_query % 1000) * 1000 * 1000; //ns
-      SE3<float> mSlamPose = my_sys->query_camera_pose(t_query);
+      mSlamPose = my_sys->query_camera_pose(t_query);
       // pubPose(stamp, mSlamPose, mTfSlam);
       tf2::Transform tf2_trans;
       tf2::Transform tf2_trans_inv;
@@ -151,10 +173,9 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
 
       tf2_trans_inv = tf2_trans.inverse();
 
-      geometry_msgs::TransformStamped transformStamped;
       transformStamped.header.stamp = stamp;
       transformStamped.header.frame_id = "slam";
-      transformStamped.child_frame_id = "robot";
+      transformStamped.child_frame_id = "zed";
 
       tf2::Quaternion q = tf2_trans_inv.getRotation();
       transformStamped.transform.rotation.x = q.x();
