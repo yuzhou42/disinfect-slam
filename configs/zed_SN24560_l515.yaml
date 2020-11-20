@@ -1,0 +1,67 @@
+# Camera Model
+Camera.name: "ZED Rev 1"
+Camera.setup: "stereo"
+Camera.model: "perspective"
+
+Camera.fps: 60
+Camera.cols: 672
+Camera.rows: 376
+
+Camera.color_order: "BGR"
+
+Camera.k1: 0.0
+Camera.k2: 0.0
+Camera.p1: 0.0
+Camera.p2: 0.0
+Camera.k3: 0.0
+
+# extrinsics from l515 to zed
+Extrinsics: [
+     0.9995,  -0.0097,  0.0289,  -37.172e-3,
+     0.009,    0.9997,  0.0247,  -22.6717e-3,
+    -0.0291,  -0.0245,  0.9993,   2.4699e-3,
+     0,         0,      0,        1
+]
+
+# reconstruction params (L515 image downsampled by half)
+Camera.fx: 456.8617
+Camera.fy: 456.77127
+Camera.cx: 322.1042
+Camera.cy: 187.79485
+depthmap_factor: 4000
+
+# Raw Camera Calibration
+Calibration.left.fx: 350.74
+Calibration.left.fy: 350.74
+Calibration.left.cx: 333.6925
+Calibration.left.cy: 185.962
+Calibration.left.distortion: [-0.173796, 0.0281908, 0, 0.00220127, -6.93936e-05]
+Calibration.right.fx: 349.0125
+Calibration.right.fy: 349.0125
+Calibration.right.cx: 333.725
+Calibration.right.cy: 185.84125
+Calibration.right.distortion: [-0.174718, 0.0280937, 0, 0.00234234, 8.86639e-05]
+Calibration.rotation: [0.0, 0.0, 0.0]
+Calibration.translation: [-0.119999, 0.0, 0.0]
+
+# ORB Parameters
+Feature.max_num_keypoints: 1000
+Feature.scale_factor: 1.2
+Feature.num_levels: 8
+Feature.ini_fast_threshold: 20
+Feature.min_fast_threshold: 7
+
+# PangolinViewer Parameters
+PangolinViewer.keyframe_size: 0.05
+PangolinViewer.keyframe_line_width: 1
+PangolinViewer.graph_line_width: 1
+PangolinViewer.point_size: 2
+PangolinViewer.camera_size: 0.08
+PangolinViewer.camera_line_width: 3
+PangolinViewer.viewpoint_x: 0
+PangolinViewer.viewpoint_y: -0.9
+PangolinViewer.viewpoint_z: -1.9
+PangolinViewer.viewpoint_f: 400
+
+# Initializer Parameters
+Initializer.num_min_triangulated_pts: 100
