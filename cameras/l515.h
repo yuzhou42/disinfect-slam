@@ -2,7 +2,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <librealsense2/rs.hpp>
-
+#include "utils/time.hpp"
 class L515 {
  public:
   L515();

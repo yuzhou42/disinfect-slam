@@ -36,7 +36,7 @@ void publishImage(cv_bridge::CvImagePtr & imgBrgPtr, const cv::Mat & img, ros::P
 }
 
 
-void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSystem> my_sys,  ros::NodeHandle& mNh, tf2_ros::TransformBroadcaster& mTfSlam, bool renderFlag) {
+void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSystem> my_sys,  ros::NodeHandle& mNh, tf2_ros::TransformBroadcaster& mTfSlam, bool renderFlag, double   bbox_xy) {
   SE3<float> mSlamPose;
   std::vector<VoxelSpatialTSDF>  mSemanticReconstr;
   std_msgs::Float32MultiArray::Ptr mReconstrMsg(new std_msgs::Float32MultiArray);
@@ -98,9 +98,9 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
   std::thread t_reconst([&]() {
       static unsigned int last_query_time = 0;
       static size_t last_query_amount = 0;
-      static float bbox = 4.0;
-      static float x_range[2] = {-bbox, bbox};
-      static float y_range[2] = {-bbox, bbox};
+      // static float bbox = 4.0;
+      static float x_range[2] = {-bbox_xy, bbox_xy};
+      static float y_range[2] = {-bbox_xy, bbox_xy};
       static float z_range[2] = {-2.0, 4.0};
       static BoundingCube<float> volumn = {
         x_range[0], x_range[1], y_range[0], y_range[1], z_range[0], z_range[1]};
@@ -112,9 +112,9 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       uint32_t tsdf_local_sub = mPubTsdfLocal.getNumSubscribers();
 
       if(tsdf_global_sub > 0){
-        const auto st = get_system_timestamp<std::chrono::milliseconds>();  // nsec
+        const auto st = get_timestamp<std::chrono::milliseconds>();  // nsec
         auto mSemanticReconstr = my_sys->query_tsdf(volumn);
-        const auto end = get_system_timestamp<std::chrono::milliseconds>();
+        const auto end = get_timestamp<std::chrono::milliseconds>();
         last_query_time = end - st;
         last_query_amount = mSemanticReconstr.size();
         std::cout<<"Last queried %lu voxels "<<last_query_amount<<", took "<< last_query_time<<" ms"<<std::endl;
@@ -125,13 +125,13 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       }
 
       if(tsdf_local_sub > 0){
-        const auto st = get_system_timestamp<std::chrono::milliseconds>();  // nsec
+        const auto st = get_timestamp<std::chrono::milliseconds>();  // nsec
         float x_off = transformStamped.transform.translation.x, y_off = transformStamped.transform.translation.y, z_off = transformStamped.transform.translation.z;
         std::cout<<"x_off: "<<x_off<<"  y_off: "<<y_off<<"  z_off: "<<z_off<<std::endl; 
         BoundingCube<float> volumn_local = {
         x_off + x_range[0], x_off+ x_range[1], y_off + y_range[0], y_off + y_range[1], z_off + z_range[0], z_off + z_range[1]};
         auto mSemanticReconstr = my_sys->query_tsdf(volumn_local);
-        const auto end = get_system_timestamp<std::chrono::milliseconds>();
+        const auto end = get_timestamp<std::chrono::milliseconds>();
         last_query_time = end - st;
         last_query_amount = mSemanticReconstr.size();
         std::cout<<"Last queried %lu voxels "<<last_query_amount<<", took "<< last_query_time<<" ms"<<std::endl;
@@ -155,7 +155,7 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       // u_int64_t tNow = std::chrono::steady_clock::now().time_since_epoch().count();  // nsec
       // stamp.sec += tNow / 1000000000UL; //s
       // stamp.nsec = tNow % 1000000000UL; //ns
-      u_int64_t t_query = get_system_timestamp<std::chrono::milliseconds>();
+      u_int64_t t_query = get_timestamp<std::chrono::milliseconds>();
       stamp.sec  = t_query / 1000; //s
       stamp.nsec = (t_query % 1000) * 1000 * 1000; //ns
       mSlamPose = my_sys->query_camera_pose(t_query);
@@ -210,11 +210,13 @@ int main(int argc, char *argv[]) {
   std::string model_path, calib_path, orb_vocab_path;
   int devid;
   bool renderFlag;
+  double bbox_xy;
 
   mNh.getParam("/ros_disinf_slam/model_path", model_path); 
   mNh.getParam("/ros_disinf_slam/calib_path", calib_path); 
   mNh.getParam("/ros_disinf_slam/orb_vocab_path", orb_vocab_path); 
   mNh.param("/ros_disinf_slam/devid", devid, 2);
+  mNh.param("/ros_disinf_slam/bbox_xy", bbox_xy, 4.0);
   mNh.param("/ros_disinf_slam/renderer", renderFlag, false);
   // ROS_INFO_STREAM(calib_path);
 
@@ -227,7 +229,7 @@ int main(int argc, char *argv[]) {
       calib_path,orb_vocab_path, model_path, renderFlag
   );
 
-  run(zed_native, l515, my_system, mNh, mTfSlam, renderFlag);
+  run(zed_native, l515, my_system, mNh, mTfSlam, renderFlag, bbox_xy);
 
   return EXIT_SUCCESS;
 }

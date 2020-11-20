@@ -29,9 +29,10 @@ rs2_intrinsics L515::get_camera_intrinsics() const {
 }
 
 int64_t L515::get_rgbd_frame(cv::Mat *color_img, cv::Mat *depth_img) const {
+  const auto st = get_timestamp<std::chrono::milliseconds>();
   auto frameset = pipe_.wait_for_frames();
   frameset = align_to_color_.process(frameset);
-
+  const auto et = get_timestamp<std::chrono::milliseconds>();
   rs2::frame color_frame = frameset.get_color_frame();
   rs2::frame depth_frame = frameset.get_depth_frame();
 
@@ -42,7 +43,8 @@ int64_t L515::get_rgbd_frame(cv::Mat *color_img, cv::Mat *depth_img) const {
 
   // Metadata of depth frame and color frame is not exactly the same
   // But depth frame is used in reconstruction. So we are returning this.
-  return (int64_t)(depth_frame.get_frame_metadata(RS2_FRAME_METADATA_BACKEND_TIMESTAMP));
+  // return (int64_t)(depth_frame.get_frame_metadata(RS2_FRAME_METADATA_BACKEND_TIMESTAMP));
+  return (int64_t)(et+st)/2;
 }
 
 void L515::set_depth_sensor_option(const rs2_option option, const float value) {
