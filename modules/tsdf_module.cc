@@ -49,6 +49,7 @@ void TSDFSystem::Render(const CameraParams &virtual_cam,
 }
 
 void TSDFSystem::Run() {
+  sleep(1);
   while (true) {
     // check for termination
     {
