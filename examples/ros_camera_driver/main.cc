@@ -24,8 +24,13 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <cv_bridge/cv_bridge.h>
 #include <std_msgs/Float32MultiArray.h>
+#include <image_transport/image_transport.h>
+
 
 using namespace std;
+// std::mutex mtx;   
+cv::Mat zedLeftMask;
+cv::Mat l515Mask;
 
 void publishImage(cv_bridge::CvImagePtr & imgBrgPtr, const cv::Mat & img, ros::Publisher & pubImg, std::string imgFrameId, std::string dataType, ros::Time t){
   imgBrgPtr->header.stamp = t;
@@ -63,11 +68,12 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
   // initialize TSDF
 
   std::thread t_slam([&]() {
-    cv::Mat img_left, img_right;
+    cv::Mat img_left, img_right, zedLeftMaskL;
     ros::Time ros_stamp;
     while (ros::ok()) {
       const int64_t timestamp = zed_native.get_stereo_img(&img_left, &img_right);
-      my_sys->feed_stereo_frame(img_left, img_right, timestamp);
+      zedLeftMaskL = zedLeftMask.clone();
+      my_sys->feed_stereo_frame(img_left, img_right, timestamp, zedLeftMaskL);
       ros_stamp.sec = timestamp / 1000;
       ros_stamp.nsec = (timestamp % 1000) * 1000 * 1000;
       if(mPubZEDImgL.getNumSubscribers()>0)
@@ -79,11 +85,12 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
   });
 
   std::thread t_tsdf([&]() {
-    cv::Mat img_rgb, img_depth;
+    cv::Mat img_rgb, img_depth, l515MaskL;
     ros::Time ros_stamp;
     while (ros::ok()) {
       const int64_t timestamp = l515.get_rgbd_frame(&img_rgb, &img_depth);
-      my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp);
+      l515MaskL = l515Mask.clone();
+      my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp,l515MaskL);
       ros_stamp.sec = timestamp / 1000;
       ros_stamp.nsec = (timestamp % 1000) * 1000 * 1000;
       if(mPubL515RGB.getNumSubscribers()>0)
@@ -203,9 +210,47 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
   
 }
 
+void zedMaskCb(const sensor_msgs::ImageConstPtr& msg)
+{
+  zedLeftMask = cv_bridge::toCvShare(msg, "8UC1")->image;
+  // try
+  // {
+  //   cv::imshow("zedMask", cv_bridge::toCvShare(msg, "bgr8")->image);
+  //   cv::waitKey(30);
+  // }
+  // catch (cv_bridge::Exception& e)
+  // {
+  //   ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
+  // }
+}
+
+void l515MaskCb(const sensor_msgs::ImageConstPtr& msg)
+{
+  // image encoding: http://docs.ros.org/en/jade/api/sensor_msgs/html/namespacesensor__msgs_1_1image__encodings.html
+  // l515Mask = cv_bridge::toCvShare(msg,  "bgr8")->image;
+  // l515Mask.convertTo(l515Mask, CV_8UC1); // depth scale
+  
+  l515Mask = cv_bridge::toCvShare(msg,  "8UC1")->image;
+
+  // try
+  // {
+  //   cv::imshow("l515Mask", cv_bridge::toCvShare(msg, "bgr8")->image);
+  //   cv::waitKey(30);
+  // }
+  // catch (cv_bridge::Exception& e)
+  // {
+  //   ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
+  // }
+}
+
 int main(int argc, char *argv[]) {
   ros::init(argc, argv, "ros_disinf_slam");
   ros::NodeHandle mNh;
+
+  image_transport::ImageTransport it(mNh);
+  image_transport::Subscriber sub1 = it.subscribe("/zed2/zed_node/right/image_rect_color", 1, zedMaskCb);
+  image_transport::Subscriber sub2 = it.subscribe("/zed2/zed_node/left/image_rect_color", 1, l515MaskCb);
+
   tf2_ros::TransformBroadcaster mTfSlam;
   std::string model_path, calib_path, orb_vocab_path;
   int devid;

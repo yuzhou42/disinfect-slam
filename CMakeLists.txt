@@ -28,6 +28,7 @@ find_package(catkin REQUIRED COMPONENTS
     tf2_ros
     cv_bridge
     shape_msgs
+    image_transport
 )
 
 # OpenGL
