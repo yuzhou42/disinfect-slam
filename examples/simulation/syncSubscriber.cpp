@@ -26,7 +26,7 @@ SyncSubsriber::SyncSubsriber()
         sync3_stereo_.reset(new Sync3(MySyncPolicy3(10), stereoLeft, stereoRight, maskLeft));
         sync3_stereo_->registerCallback(boost::bind(&SyncSubsriber::stereoCb, this, _1, _2, _3));
 
-        sync3_depth_.reset(new Sync3(MySyncPolicy3(10), depth, rgbImg, maskDepth));
+        sync3_depth_.reset(new Sync3(MySyncPolicy3(10), rgbImg, depth, maskDepth));
         sync3_depth_->registerCallback(boost::bind(&SyncSubsriber::depthCb, this, _1, _2, _3));
     }
     else
@@ -34,7 +34,7 @@ SyncSubsriber::SyncSubsriber()
         sync2_stereo_.reset(new Sync2(MySyncPolicy2(10), stereoLeft, stereoRight));
         sync2_stereo_->registerCallback(boost::bind(&SyncSubsriber::stereoCb, this, _1, _2));
 
-        sync2_depth_.reset(new Sync2(MySyncPolicy2(10), depth, rgbImg));
+        sync2_depth_.reset(new Sync2(MySyncPolicy2(10), rgbImg, depth));
         sync2_depth_->registerCallback(boost::bind(&SyncSubsriber::depthCb, this, _1, _2));
     }
 
@@ -60,9 +60,9 @@ void SyncSubsriber::stereoCb(const ImageConstPtr& stereoLeft, const ImageConstPt
 void SyncSubsriber::depthCb(const ImageConstPtr& rgbImg, const ImageConstPtr& depth)
 {
     ROS_INFO("got depth data");
-    cv::Mat img_rgb         = cv_bridge::toCvShare(rgbImg, "bgr8")->image;
-    cv::Mat img_depth       = cv_bridge::toCvShare(depth, "MONO16")->image; //mono16/16UC1
-    // cv::Mat img_depth(540, 960, CV_16UC1, const_cast<uchar*>(&depth->data[0]), 1920);
+    cv::Mat img_rgb         = cv_bridge::toCvShare(rgbImg, "rgb8")->image;
+    cv::Mat img_depth       = cv_bridge::toCvShare(depth, "16UC1")->image; //mono16/16UC1
+    ROS_INFO("finished converting");
     const int64_t timestamp = rgbImg->header.stamp.toSec();
     my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp);
 }
@@ -74,7 +74,7 @@ void SyncSubsriber::stereoCb(const ImageConstPtr& stereoLeft,
     ROS_INFO("got stereo data");
     cv::Mat img_left     = cv_bridge::toCvShare(stereoLeft, "bgr8")->image;
     cv::Mat img_right    = cv_bridge::toCvShare(stereoRight, "bgr8")->image;
-    cv::Mat zedLeftMaskL = cv_bridge::toCvShare(maskLeft, "mono8")->image;
+    cv::Mat zedLeftMaskL = cv_bridge::toCvShare(maskLeft, "8UC1")->image;
 
     const int64_t timestamp = stereoLeft->header.stamp.toSec();
     my_sys->feed_stereo_frame(img_left, img_right, timestamp, zedLeftMaskL);
@@ -85,9 +85,9 @@ void SyncSubsriber::depthCb(const ImageConstPtr& rgbImg,
                             const ImageConstPtr& maskDepth)
 {
     ROS_INFO("got stereo data");
-    cv::Mat img_rgb   = cv_bridge::toCvShare(rgbImg, "bgr8")->image;
-    cv::Mat img_depth = cv_bridge::toCvShare(depth, "mono16")->image;
-    cv::Mat l515MaskL = cv_bridge::toCvShare(maskDepth, "mono8")->image;
+    cv::Mat img_rgb   = cv_bridge::toCvShare(rgbImg, "rgb8")->image;
+    cv::Mat img_depth = cv_bridge::toCvShare(depth, "16UC1")->image;
+    cv::Mat l515MaskL = cv_bridge::toCvShare(maskDepth, "8UC1")->image;
 
     const int64_t timestamp = rgbImg->header.stamp.toSec();
     my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp, l515MaskL);
