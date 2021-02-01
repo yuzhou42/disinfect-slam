@@ -11,12 +11,12 @@ SyncSubsriber::SyncSubsriber()
 
     image_transport::ImageTransport it(nh_);
 
-    stereoLeft.subscribe(it, "/stereoLeft", 10);
-    stereoRight.subscribe(it, "/stereoRight", 10);
-    depth.subscribe(it, "/depth", 10);
-    rgbImg.subscribe(it, "/rgbImg", 10);
-    maskLeft.subscribe(it, "/maskLeft", 10);
-    maskDepth.subscribe(it, "/maskDepth", 10);
+    stereoLeft.subscribe(it, "/stereoLeft", 3);
+    stereoRight.subscribe(it, "/stereoRight", 3);
+    depth.subscribe(it, "/depth", 3);
+    rgbImg.subscribe(it, "/rgbImg", 3);
+    maskLeft.subscribe(it, "/maskLeft", 3);
+    maskDepth.subscribe(it, "/maskDepth", 3);
 
     // publishers
     mPubTsdfGlobal = nh_.advertise<std_msgs::Float32MultiArray>("/tsdf_global", 4);
@@ -50,21 +50,23 @@ SyncSubsriber::SyncSubsriber()
 
 void SyncSubsriber::stereoCb(const ImageConstPtr& stereoLeft, const ImageConstPtr& stereoRight)
 {
-    ROS_INFO("got stereo data");
     cv::Mat img_left        = cv_bridge::toCvShare(stereoLeft, "bgr8")->image;
     cv::Mat img_right       = cv_bridge::toCvShare(stereoRight, "bgr8")->image;
-    const int64_t timestamp = stereoLeft->header.stamp.toSec();
-    my_sys->feed_stereo_frame(img_left, img_right, timestamp);
+    static double initTime = stereoLeft->header.stamp.toSec()*1000;
+    double timestamp = stereoLeft->header.stamp.toSec()*1000;
+    double timeDiff = timestamp-initTime;
+    // ROS_INFO("Stereo timestamp: %f, %d", timeDiff, int64_t(timeDiff));
+    my_sys->feed_stereo_frame(img_left, img_right, int64_t(timeDiff));
 }
 
 void SyncSubsriber::depthCb(const ImageConstPtr& rgbImg, const ImageConstPtr& depth)
 {
-    ROS_INFO("got depth data");
     cv::Mat img_rgb         = cv_bridge::toCvShare(rgbImg, "rgb8")->image;
     cv::Mat img_depth       = cv_bridge::toCvShare(depth, "16UC1")->image; //mono16/16UC1
-    ROS_INFO("finished converting");
-    const int64_t timestamp = rgbImg->header.stamp.toSec();
-    my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp);
+    static double initTime = rgbImg->header.stamp.toSec()*1000;
+    double timestamp = rgbImg->header.stamp.toSec()*1000;
+    double timeDiff = timestamp-initTime;
+    my_sys->feed_rgbd_frame(img_rgb, img_depth, int64_t(timeDiff));
 }
 
 void SyncSubsriber::stereoCb(const ImageConstPtr& stereoLeft,
@@ -75,9 +77,11 @@ void SyncSubsriber::stereoCb(const ImageConstPtr& stereoLeft,
     cv::Mat img_left     = cv_bridge::toCvShare(stereoLeft, "bgr8")->image;
     cv::Mat img_right    = cv_bridge::toCvShare(stereoRight, "bgr8")->image;
     cv::Mat zedLeftMaskL = cv_bridge::toCvShare(maskLeft, "8UC1")->image;
-
+    static double initTime = stereoLeft->header.stamp.toSec()*1000;
     const int64_t timestamp = stereoLeft->header.stamp.toSec();
-    my_sys->feed_stereo_frame(img_left, img_right, timestamp, zedLeftMaskL);
+    double timeDiff = timestamp-initTime;
+
+    my_sys->feed_stereo_frame(img_left, img_right, int64_t(timeDiff), zedLeftMaskL);
 }
 
 void SyncSubsriber::depthCb(const ImageConstPtr& rgbImg,
@@ -88,9 +92,11 @@ void SyncSubsriber::depthCb(const ImageConstPtr& rgbImg,
     cv::Mat img_rgb   = cv_bridge::toCvShare(rgbImg, "rgb8")->image;
     cv::Mat img_depth = cv_bridge::toCvShare(depth, "16UC1")->image;
     cv::Mat l515MaskL = cv_bridge::toCvShare(maskDepth, "8UC1")->image;
-
+    static double initTime = rgbImg->header.stamp.toSec()*1000;
     const int64_t timestamp = rgbImg->header.stamp.toSec();
-    my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp, l515MaskL);
+    double timeDiff = timestamp-initTime;
+
+    my_sys->feed_rgbd_frame(img_rgb, img_depth, int64_t(timeDiff), l515MaskL);
 }
 
 void SyncSubsriber::SyncSubsriber::reconstTimerCallback(const ros::TimerEvent&)
@@ -157,7 +163,6 @@ void SyncSubsriber::poseTimerCallback(const ros::TimerEvent&)
 {
     static tf2_ros::TransformBroadcaster mTfSlam;
     static ros::Time stamp;
-    static ros::Rate rate(30);
     u_int64_t t_query    = get_timestamp<std::chrono::milliseconds>();
     stamp.sec            = t_query / 1000;                 // s
     stamp.nsec           = (t_query % 1000) * 1000 * 1000; // ns
