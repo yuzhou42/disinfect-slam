@@ -8,7 +8,7 @@ DISINFSystem::DISINFSystem(std::string camera_config_path,
 
     std::shared_ptr<openvslam::config> cfg = get_and_set_config(camera_config_path);
     SLAM_                                  = std::make_shared<SLAMSystem>(cfg, vocab_path);
-    SEG_                                   = std::make_shared<inference_engine>(seg_model_path);
+    // SEG_                                   = std::make_shared<inference_engine>(seg_model_path);
     TSDF_                                  = std::make_shared<TSDFSystem>(0.05,
                                          0.1,
                                          4,
@@ -58,8 +58,8 @@ void DISINFSystem::feed_rgbd_frame(const cv::Mat& img_rgb,
         }
     }
 
-    std::vector<cv::Mat> prob_map = SEG_->infer_one(my_img_rgb, false);
-    TSDF_->Integrate(posecam_P_world, my_img_rgb, my_img_depth, prob_map[0], prob_map[1]);
+    // std::vector<cv::Mat> prob_map = SEG_->infer_one(my_img_rgb, false);
+    TSDF_->Integrate(posecam_P_world, my_img_rgb, my_img_depth);
 }
 
 void DISINFSystem::feed_stereo_frame(const cv::Mat& img_left,

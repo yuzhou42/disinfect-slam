@@ -48,7 +48,7 @@ class DISINFSystem {
 
   private:
     std::shared_ptr<SLAMSystem> SLAM_;
-    std::shared_ptr<inference_engine> SEG_;
+    // std::shared_ptr<inference_engine> SEG_;
     std::shared_ptr<TSDFSystem> TSDF_;
     std::shared_ptr<ImageRenderer> RENDERER_;
 
