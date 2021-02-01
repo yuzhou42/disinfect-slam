@@ -1,7 +1,7 @@
 # From parent CMake
 # It's safe to assume that libtorch is installed.
 if (CMAKE_CUDA_COMPILER)
-    add_executable(simulate_disinf_slam main.cc)
+    add_executable(simulate_disinf_slam main.cc syncSubscriber.cpp)
     target_link_libraries(simulate_disinf_slam PUBLIC ${catkin_LIBRARIES}
         PRIVATE disinf_slam_top_level popl openvslam ${OpenCV_LIBS})
     add_dependencies(simulate_disinf_slam disinf_slam_top_level)

@@ -31,19 +31,21 @@ void DISINFSystem::run() {
 }
 
 void DISINFSystem::feed_rgbd_frame(const cv::Mat & img_rgb, const cv::Mat & img_depth, int64_t timestamp, const cv::Mat& mask) {
-    cv::Mat my_img_rgb, my_img_depth; // local Mat that will be modified
+    cv::Mat my_img_rgb, my_img_depth, my_mask; // local Mat that will be modified
     // if (SLAM_->terminate_is_requested())
     //     break;
     const SE3<float> posecam_P_world = camera_pose_manager->query_pose(timestamp);
     cv::resize(img_rgb, my_img_rgb, cv::Size(), .5, .5);
     cv::resize(img_depth, my_img_depth, cv::Size(), .5, .5);
+    cv::resize(mask, my_mask, cv::Size(), .5, .5);
+
     my_img_depth.convertTo(my_img_depth, CV_32FC1, 1. / 4000); // depth scale
     cv::Size s = my_img_depth.size();
     int num_rows = s.height;
     int num_cols = s.width;
     for (unsigned  int  i  =  0; i  <  num_rows; ++i){
         for (unsigned  int  j  =  0; j  <  num_cols; ++j){
-            if(mask.at<unsigned  char>(i, j) ==  1)
+            if(my_mask.at<unsigned  char>(i, j) ==  1)
                 my_img_depth.at<float>(i, j) ==  0.0;
         }
       }
