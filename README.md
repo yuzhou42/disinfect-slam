@@ -67,17 +67,27 @@ This section is still WIP
 ```
 ln -s /path_to_torchlib thrid_party/libtorch
 ```
-- set paths in launch/disinfslam.launch
+- setup dependencies
+```
+sudo apt-get install ros-noetic-eigen-stl-containers
+sudo apt-get install ros-noetic-graph-msgs
+```
+- set model_path/calib_path/orb_vocab_path in launch/disinfslam.launch
 
 - compile
 ```bash
-catkin build -DCMAKE_PREFIX_PATH=$HOME/.local  -DCMAKE_BUILD_TYPE=Release
-
+catkin build  
 ```
 ### Running
 ```bash
 roslaunch disinfslam disinfslam.launch 
+roslaunch TSDF2Mesh tsdf2mesh.launch
+```
 
+### Visulization
+```
+rviz
+# open recent config and selet ~/slam_ws/slam.rviz
 ```
 ## TODO
 
