@@ -39,7 +39,7 @@ SyncSubsriber::SyncSubsriber()
     }
 
     reconstTimer = nh_.createTimer(ros::Duration(0.2), &SyncSubsriber::reconstTimerCallback, this);
-    poseTimer    = nh_.createTimer(ros::Duration(0.2), &SyncSubsriber::poseTimerCallback, this);
+    poseTimer    = nh_.createTimer(ros::Duration(0.05), &SyncSubsriber::poseTimerCallback, this);
 
     // ROS_INFO_STREAM(calib_path);
 
@@ -105,8 +105,8 @@ void SyncSubsriber::SyncSubsriber::reconstTimerCallback(const ros::TimerEvent&)
     static size_t last_query_amount     = 0;
     // static float bbox = 4.0;
     static float x_range[2]           = {-bbox_xy, bbox_xy};
-    static float y_range[2]           = {-bbox_xy, bbox_xy};
-    static float z_range[2]           = {-2.0, 4.0};
+    static float y_range[2]           = {-4, 2};
+    static float z_range[2]           = {-bbox_xy, bbox_xy};
     static BoundingCube<float> volumn = {
         x_range[0], x_range[1], y_range[0], y_range[1], z_range[0], z_range[1]};
     static ros::Time stamp;
