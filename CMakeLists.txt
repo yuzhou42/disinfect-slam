@@ -1,16 +1,19 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.18)
 
 project(disinfslam LANGUAGES CXX C)
 # set(CMAKE_BUILD_TYPE Debug)
+
+set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc) 
 include(CheckLanguage)
 check_language(CUDA)
 if (CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 14)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    set(CMAKE_CUDA_FLAGS "-arch=sm_35 -use_fast_math ${CMAKE_CUDA_FLAGS}")
-    set(CMAKE_CUDA_FLAGS_DEBUG "-G ${CMAKE_CUDA_FLAGS_DEBUG}")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -expt-relaxed-constexpr")
+    set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -G")
     set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+    set(CMAKE_CUDA_ARCHITECTURES 61 72 75 80)
 endif ()
 
 set(CMAKE_CXX_STANDARD 17)
