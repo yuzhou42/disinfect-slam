@@ -31,6 +31,9 @@ using namespace std;
 // std::mutex mtx;   
 cv::Mat zedLeftMask;
 cv::Mat l515Mask;
+std::mutex mask_lock;
+std::mutex zed_mask_lock;
+
 
 void publishImage(cv_bridge::CvImagePtr & imgBrgPtr, const cv::Mat & img, ros::Publisher & pubImg, std::string imgFrameId, std::string dataType, ros::Time t){
   imgBrgPtr->header.stamp = t;
@@ -72,8 +75,12 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
     ros::Time ros_stamp;
     while (ros::ok()) {
       const int64_t timestamp = zed_native.get_stereo_img(&img_left, &img_right);
+      zed_mask_lock.lock();
       zedLeftMaskL = zedLeftMask.clone();
+      zed_mask_lock.unlock();
       my_sys->feed_stereo_frame(img_left, img_right, timestamp, zedLeftMaskL);
+      // my_sys->feed_stereo_frame(img_left, img_right, timestamp);
+
       ros_stamp.sec = timestamp / 1000;
       ros_stamp.nsec = (timestamp % 1000) * 1000 * 1000;
       if(mPubZEDImgL.getNumSubscribers()>0)
@@ -89,8 +96,17 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
     ros::Time ros_stamp;
     while (ros::ok()) {
       const int64_t timestamp = l515.get_rgbd_frame(&img_rgb, &img_depth);
-      l515MaskL = l515Mask.clone();
+        std::cout << "TSDF Thread: " << &mask_lock << std::endl;
+        mask_lock.lock();
+        l515MaskL = l515Mask.clone();
+        // cv::imshow("mask_depth", l515MaskL);
+        // cv::waitKey(1);
+        mask_lock.unlock();
+        
+
       my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp,l515MaskL);
+      // my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp);
+
       ros_stamp.sec = timestamp / 1000;
       ros_stamp.nsec = (timestamp % 1000) * 1000 * 1000;
       if(mPubL515RGB.getNumSubscribers()>0)
@@ -108,7 +124,7 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       // static float bbox = 4.0;
       static float x_range[2] = {-bbox_xy, bbox_xy};
       static float y_range[2] = {-bbox_xy, bbox_xy};
-      static float z_range[2] = {-2.0, 4.0};
+      static float z_range[2]           = {0, 8};
       static BoundingCube<float> volumn = {
         x_range[0], x_range[1], y_range[0], y_range[1], z_range[0], z_range[1]};
       static ros::Time stamp;
@@ -212,7 +228,9 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
 
 void zedMaskCb(const sensor_msgs::ImageConstPtr& msg)
 {
-  zedLeftMask = cv_bridge::toCvShare(msg, "8UC1")->image;
+  zed_mask_lock.lock();
+  zedLeftMask = cv_bridge::toCvShare(msg, "8UC1")->image.clone();
+  zed_mask_lock.unlock();
   // try
   // {
   //   cv::imshow("zedMask", cv_bridge::toCvShare(msg, "bgr8")->image);
@@ -229,8 +247,9 @@ void l515MaskCb(const sensor_msgs::ImageConstPtr& msg)
   // image encoding: http://docs.ros.org/en/jade/api/sensor_msgs/html/namespacesensor__msgs_1_1image__encodings.html
   // l515Mask = cv_bridge::toCvShare(msg,  "bgr8")->image;
   // l515Mask.convertTo(l515Mask, CV_8UC1); // depth scale
-  
-  l515Mask = cv_bridge::toCvShare(msg,  "8UC1")->image;
+  mask_lock.lock();
+  l515Mask = cv_bridge::toCvShare(msg,  "8UC1")->image.clone();
+  mask_lock.unlock();
 
   // try
   // {
@@ -248,8 +267,8 @@ int main(int argc, char *argv[]) {
   ros::NodeHandle mNh;
 
   image_transport::ImageTransport it(mNh);
-  image_transport::Subscriber sub1 = it.subscribe("/zed2/zed_node/right/image_rect_color", 1, zedMaskCb);
-  image_transport::Subscriber sub2 = it.subscribe("/zed2/zed_node/left/image_rect_color", 1, l515MaskCb);
+  image_transport::Subscriber sub1 = it.subscribe("/robot_mask/zed_slam_left", 1, zedMaskCb);
+  image_transport::Subscriber sub2 = it.subscribe("/robot_mask/realsense_slam_l515", 1, l515MaskCb);
 
   tf2_ros::TransformBroadcaster mTfSlam;
   std::string model_path, calib_path, orb_vocab_path;
