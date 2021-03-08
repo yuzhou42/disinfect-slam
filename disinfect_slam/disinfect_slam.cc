@@ -9,9 +9,7 @@ DISINFSystem::DISINFSystem(std::string camera_config_path,
     std::shared_ptr<openvslam::config> cfg = get_and_set_config(camera_config_path);
     SLAM_                                  = std::make_shared<SLAMSystem>(cfg, vocab_path);
     // SEG_                                   = std::make_shared<inference_engine>(seg_model_path);
-    TSDF_                                  = std::make_shared<TSDFSystem>(0.05,
-                                         0.1,
-                                         4,
+    TSDF_                                  = std::make_shared<TSDFSystem>(0.01, 0.06, 4,
                                          get_intrinsics_from_file(camera_config_path),
                                          get_extrinsics_from_file(camera_config_path));
 
@@ -44,19 +42,33 @@ void DISINFSystem::feed_rgbd_frame(const cv::Mat& img_rgb,
 
     if (!mask.empty())
     {
+        // std::cout<<"mask is not empty!"<<std::endl;
         cv::resize(mask, my_mask, cv::Size(), .5, .5);
         cv::Size s   = my_img_depth.size();
         int num_rows = s.height;
         int num_cols = s.width;
+        int cnt = 0;
         for (unsigned int i = 0; i < num_rows; ++i)
         {
             for (unsigned int j = 0; j < num_cols; ++j)
             {
-                if (my_mask.at<unsigned char>(i, j) == 1)
-                    my_img_depth.at<float>(i, j) == 0.0;
+                if (my_mask.at<unsigned char>(i, j) == 0)
+                {
+                    my_img_depth.at<float>(i, j) = 0.0;
+                    cnt++;
+
+                }
             }
         }
+        // std::cout<<"mask count: "<<cnt<<std::endl;
+        // cv::imshow("mask_depth", my_img_depth);
+        // cv::waitKey(1);
+
     }
+    // else{
+    //     std::cout<<"mask is empty!!!!!!!!!"<<std::endl;
+
+    // }
 
     // std::vector<cv::Mat> prob_map = SEG_->infer_one(my_img_rgb, false);
     TSDF_->Integrate(posecam_P_world, my_img_rgb, my_img_depth);
