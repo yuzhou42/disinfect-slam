@@ -61,7 +61,8 @@
   <build_depend>shape_msgs</build_depend>
   <build_depend>image_transport</build_depend>
   <build_depend>message_filters</build_depend>
-
+  <build_depend>shape_msgs</build_depend>
+  <build_depend>rviz_visual_tools</build_depend>
 
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nodelet</exec_depend>
@@ -75,6 +76,9 @@
   <exec_depend>shape_msgs</exec_depend>
   <exec_depend>image_transport</exec_depend>
   <exec_depend>message_filters</exec_depend>
+  <exec_depend>shape_msgs</exec_depend>
+  <exec_depend>rviz_visual_tools</exec_depend>
+
 
 
 </package>

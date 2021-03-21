@@ -29,10 +29,32 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <KrisLibrary/geometry/TSDFReconstruction.h>
+#include <KrisLibrary/math3d/AABB3D.h>
+#include <KrisLibrary/meshing/IO.h>
+#include <KrisLibrary/meshing/TriMeshOperators.h>
+#include <KrisLibrary/utils/ioutils.h>
+#include <KrisLibrary/utils.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fstream>
+#include <ros/ros.h>
+#include <shape_msgs/Mesh.h>
+#include <geometry_msgs/Point.h>
+#include <shape_msgs/MeshTriangle.h>
+#include <rviz_visual_tools/rviz_visual_tools.h>
+#include <std_msgs/Float32MultiArray.h>
+#include <tf2_eigen/tf2_eigen.h>
+#include <tf2/convert.h>
+#include <chrono>
+#include <cinttypes>
+
 using namespace sensor_msgs;
 using namespace message_filters;
 using namespace std;
 
+#define CELL_SIZE 0.05
+#define TRUNCATION_DISTANCE -0.1
 class SyncSubsriber
 {
 public:
@@ -45,15 +67,17 @@ public:
 
     void reconstTimerCallback(const ros::TimerEvent&);
     void poseTimerCallback(const ros::TimerEvent&);
+    void tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg);
 
 private:
     ros::NodeHandle nh_;
     std::string model_path, calib_path, orb_vocab_path;
     bool use_mask;
+    bool global_mesh;
     bool renderFlag;
     double bbox_xy;
-    ros::Publisher mPubTsdfGlobal;
-    ros::Publisher mPubTsdfLocal;
+    // ros::Publisher mPubTsdfGlobal;
+    // ros::Publisher mPubTsdfLocal;
     geometry_msgs::TransformStamped transformStamped;
     std_msgs::Float32MultiArray::Ptr mReconstrMsg;
     // initialize slam
@@ -77,4 +101,9 @@ private:
     image_transport::SubscriberFilter stereoLeft, stereoRight, depth, rgbImg, maskLeft, maskDepth;
     ros::Timer reconstTimer;
     ros::Timer poseTimer;
+
+    rviz_visual_tools::RvizVisualToolsPtr visual_tools_;
+    tf2_ros::Buffer tfBuffer;
+    ros::Publisher meshPub;
+    std::shared_ptr<tf2_ros::TransformListener> tfListener;
 };
