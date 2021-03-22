@@ -45,7 +45,7 @@ SyncSubsriber::SyncSubsriber()
 
     // ROS_INFO_STREAM(calib_path);
 
-    auto cfg = get_and_set_config(calib_path);
+    auto cfg = GetAndSetConfig(calib_path);
     my_sys   = std::make_shared<DISINFSystem>(calib_path, orb_vocab_path, model_path, renderFlag);
     mReconstrMsg.reset(new std_msgs::Float32MultiArray);
     visual_tools_.reset(new rviz_visual_tools::RvizVisualTools("world","/mesh_visual", nh_));
@@ -126,7 +126,7 @@ void SyncSubsriber::tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg)
 
     auto values = msg->data;
     ROS_INFO("I heard tsdf of size: ", msg->data.size());
-    const auto st = get_system_timestamp<std::chrono::milliseconds>();  // nsec
+    const auto st = GetTimestamp<std::chrono::milliseconds>();  // nsec
 
     int numPoints = msg->data.size()/4;
     float minValue = 1e100, maxValue = -1e100;
@@ -169,10 +169,10 @@ void SyncSubsriber::tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg)
 
     std::cout<<"vertsSize: "<<vertsSize<<std::endl;
     std::cout<<"trisSize: "<<trisSize<<std::endl;
-    const auto end = get_system_timestamp<std::chrono::milliseconds>();
+    const auto end = GetTimestamp<std::chrono::milliseconds>();
     std::cout<<"mesh processing time: "<<end-st<<" ms"<<std::endl;
 
-    const auto st_msg = get_system_timestamp<std::chrono::milliseconds>();  
+    const auto st_msg = GetTimestamp<std::chrono::milliseconds>();  
     shape_msgs::Mesh::Ptr mMeshMsg = boost::make_shared<shape_msgs::Mesh>();
     // geometry_msgs/Point[] 
     mMeshMsg->vertices.resize(vertsSize);
@@ -201,7 +201,7 @@ void SyncSubsriber::tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg)
     // Publish arrow vector of pose
     visual_tools_->publishMesh(pose, *mMeshMsg, rviz_visual_tools::ORANGE, 1, "mesh", 1); // rviz_visual_tools::TRANSLUCENT_LIGHT
 
-    const auto end_msg = get_system_timestamp<std::chrono::milliseconds>();  
+    const auto end_msg = GetTimestamp<std::chrono::milliseconds>();  
     std::cout<<"Maker msg processing time: "<<end_msg-st_msg<<" ms"<<std::endl;
 
 
@@ -223,7 +223,7 @@ void SyncSubsriber::SyncSubsriber::reconstTimerCallback(const ros::TimerEvent&)
 
     if (!global_mesh)
     {
-        const auto st = get_timestamp<std::chrono::milliseconds>(); // nsec
+        const auto st = GetTimestamp<std::chrono::milliseconds>(); // nsec
         float x_off   = transformStamped.transform.translation.x,
               y_off   = transformStamped.transform.translation.y,
               z_off   = transformStamped.transform.translation.z;
@@ -237,9 +237,9 @@ void SyncSubsriber::SyncSubsriber::reconstTimerCallback(const ros::TimerEvent&)
                     z_off + z_range[1]};
     }
 
-    const auto st          = get_timestamp<std::chrono::milliseconds>(); // nsec
+    const auto st          = GetTimestamp<std::chrono::milliseconds>(); // nsec
     auto mSemanticReconstr           = my_sys->query_tsdf(volumn);
-    const auto end                   = get_timestamp<std::chrono::milliseconds>();
+    const auto end                   = GetTimestamp<std::chrono::milliseconds>();
     last_query_time                  = end - st;
     last_query_amount                = mSemanticReconstr.size();
     std::cout << "Last queried %lu voxels " << last_query_amount << ", took " << last_query_time
@@ -258,7 +258,7 @@ void SyncSubsriber::poseTimerCallback(const ros::TimerEvent&)
 {
     static tf2_ros::TransformBroadcaster mTfSlam;
     static ros::Time stamp;
-    u_int64_t t_query    = get_timestamp<std::chrono::milliseconds>();
+    u_int64_t t_query    = GetTimestamp<std::chrono::milliseconds>();
     stamp.sec            = t_query / 1000;                 // s
     stamp.nsec           = (t_query % 1000) * 1000 * 1000; // ns
     SE3<float> mSlamPose = my_sys->query_camera_pose(t_query);
@@ -266,19 +266,11 @@ void SyncSubsriber::poseTimerCallback(const ros::TimerEvent&)
     tf2::Transform tf2_trans;
     tf2::Transform tf2_trans_inv;
 
-    tf2::Matrix3x3 R(mSlamPose.m00,
-                     mSlamPose.m01,
-                     mSlamPose.m02,
-                     mSlamPose.m10,
-                     mSlamPose.m11,
-                     mSlamPose.m12,
-                     mSlamPose.m20,
-                     mSlamPose.m21,
-                     mSlamPose.m22);
-    tf2::Vector3 T(mSlamPose.m03, mSlamPose.m13, mSlamPose.m23);
+    Eigen::Quaternion<float> R = mSlamPose.GetR();
+    Eigen::Matrix<float, 3, 1> T = mSlamPose.GetT();
 
-    tf2_trans.setBasis(R);
-    tf2_trans.setOrigin(T);
+    tf2_trans.setRotation(tf2::Quaternion(R.x(), R.y(), R.z(), R.w()));
+    tf2_trans.setOrigin(tf2::Vector3(T.x(), T.y(), T.z()));
 
     tf2_trans_inv = tf2_trans.inverse();
 

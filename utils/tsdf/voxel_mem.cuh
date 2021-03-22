@@ -1,80 +1,179 @@
 #pragma once
 
-#include <cassert>
 #include <cuda_runtime.h>
 
+#include <Eigen/Dense>
+#include <cassert>
+
 #include "utils/tsdf/voxel_types.cuh"
-#include "utils/cuda/vector.cuh"
 
-#define NUM_BLOCK_BITS    12
-#define NUM_BLOCK         (1 << NUM_BLOCK_BITS)
+// total number of voxel blocks available
+#define NUM_BLOCK_BITS 18
+#define NUM_BLOCK (1 << NUM_BLOCK_BITS)
 
-#define BLOCK_LEN_BITS    3
-#define BLOCK_AREA_BITS   (BLOCK_LEN_BITS * 2)
+// block properties
+#define BLOCK_LEN_BITS 3
+#define BLOCK_AREA_BITS (BLOCK_LEN_BITS * 2)
 #define BLOCK_VOLUME_BITS (BLOCK_LEN_BITS * 3)
-#define BLOCK_LEN         (1 << BLOCK_LEN_BITS)
-#define BLOCK_AREA        (1 << BLOCK_AREA_BITS)
-#define BLOCK_VOLUME      (1 << BLOCK_VOLUME_BITS)
+#define BLOCK_LEN (1 << BLOCK_LEN_BITS)
+#define BLOCK_AREA (1 << BLOCK_AREA_BITS)
+#define BLOCK_VOLUME (1 << BLOCK_VOLUME_BITS)
 
-__device__ __host__ Vector3<short> point2block(const Vector3<short> &point);
+/**
+ * @brief convert voxel coordinate to block coordinate
+ *
+ * @param point voxel coordinate in integer grid
+ *
+ * @return block cooridnate in integer grid
+ */
+__device__ __host__ inline Eigen::Matrix<short, 3, 1> PointToBlock(
+    const Eigen::Matrix<short, 3, 1>& point) {
+  return point.unaryExpr([](const short x) -> short { return x >> BLOCK_LEN_BITS; });
+}
 
-__device__ __host__ Vector3<short> point2offset(const Vector3<short> &point);
+/**
+ * @brief convert block coordinate to voxel coordinate
+ *
+ * @param block_pos block coordinate in integer grid
+ *
+ * @return voxel cooridnate in integer grid
+ */
+__device__ __host__ inline Eigen::Matrix<short, 3, 1> BlockToPoint(
+    const Eigen::Matrix<short, 3, 1>& block_pos) {
+  return block_pos.unaryExpr([](const short x) -> short { return x << BLOCK_LEN_BITS; });
+}
 
-__device__ __host__ unsigned int offset2index(const Vector3<short> &point_offset);
+/**
+ * @brief convert voxel coordinate to voxel block index
+ *
+ * @param point voxel coordinate in integer grid
+ *
+ * @return relative voxel index in [0, BLOCK_VOLUME)
+ */
+__device__ __host__ inline Eigen::Matrix<short, 3, 1> PointToOffset(
+    const Eigen::Matrix<short, 3, 1>& point) {
+  return point.unaryExpr([](const short x) -> short { return x & (BLOCK_LEN - 1); });
+}
 
+/**
+ * @brief convert voxel relative offset to voxel relative index
+ *
+ * @param point_offset  3D offset w.r.t. the first voxel in the block
+ *
+ * @return relative voxel index in [0, BLOCK_VOLUME)
+ */
+__device__ __host__ inline unsigned int OffsetToIndex(
+    const Eigen::Matrix<short, 3, 1>& point_offset) {
+  return point_offset[0] + point_offset[1] * BLOCK_LEN + point_offset[2] * BLOCK_AREA;
+}
+
+/**
+ * @brief data structure for voxel block meta data
+ */
 struct VoxelBlock {
-  Vector3<short>  position;
-  // offset < 0:  block not in hash table
-  // offset = 0:  normal entry
-  // offset > 0:  part of a list
-  short           offset;
-  int             idx;
+  // block position in integer grid
+  Eigen::Matrix<short, 3, 1> position;
+  // offset < 0:  block not in hash table (TODO(alvin): CPU streaming is not yet
+  // implemented) offset = 0:  normal entry offset > 0:  part of a list
+  short offset;
+  // index into the memory pool of voxel blocks
+  int idx;
 
-  __device__ __host__ VoxelBlock() : offset(0), idx(-1) {};
+  /**
+   * @brief default construction of a non-existing block
+   */
+  __device__ __host__ VoxelBlock() : offset(0), idx(-1){};
 
-  __device__ __host__ VoxelBlock(int idx) : offset(0), idx(idx) {};
+  /**
+   * @brief construct a block with a valid memory pool index
+   *
+   * @param idx index into the memory pool of voxel blocks
+   */
+  __device__ __host__ VoxelBlock(int idx) : offset(0), idx(idx){};
 };
 
 class VoxelMemPool {
  public:
+  /**
+   * @brief internal allocation of intermediate GPU buffers
+   */
   VoxelMemPool();
 
-  void Reset();
-
+  /**
+   * @brief release all internally allocated GPU buffers
+   */
   void ReleaseMemory();
 
+  /**
+   * @brief aquire a voxel block from the pre-allocated heap
+   *
+   * @return index of the voxel block
+   */
   __device__ int AquireBlock();
 
+  /**
+   * @brief release a voxel block back to the heap
+   *
+   * @param block_idx index of the voxel block
+   */
   __device__ void ReleaseBlock(const int block_idx);
 
-  template<typename Voxel>
-  __device__ Voxel& GetVoxel(const Vector3<short> &point, const VoxelBlock &block) const {
+  /**
+   * @brief read voxel data from integer voxel location
+   *
+   * @tparam Voxel  voxel type
+   * @param point   voxel position in integer grid
+   * @param block   voxel block meta data
+   *
+   * @return  voxel data with Voxel type
+   */
+  template <typename Voxel>
+  __device__ Voxel& GetVoxel(const Eigen::Matrix<short, 3, 1>& point,
+                             const VoxelBlock& block) const {
     assert(block.idx >= 0 && block.idx < NUM_BLOCK);
-    assert(point2block(point) == block.position);
-    const Vector3<short> offset = point2offset(point);
-    const unsigned short idx = offset2index(offset);
+    assert(PointToBlock(point) == block.position);
+    const Eigen::Matrix<short, 3, 1> offset = PointToOffset(point);
+    const unsigned short idx = OffsetToIndex(offset);
     return GetVoxel<Voxel>(idx, block);
   }
 
-  template<typename Voxel>
-  __device__ Voxel& GetVoxel(const int idx, const VoxelBlock &block) const {
+  /**
+   * @brief read voxel data with relative voxel index
+   *
+   * @tparam Voxel  voxel type
+   * @param idx     index into a block of voxel, in [0, BLOCK_VOLUMN)
+   * @param block   voxel block meta data
+   *
+   * @return  voxel data with Voxel type
+   */
+  template <typename Voxel>
+  __device__ Voxel& GetVoxel(const int idx, const VoxelBlock& block) const {
     assert(idx >= 0 && idx < BLOCK_VOLUME);
-    Voxel *voxels = GetVoxelData<Voxel>();
+    Voxel* voxels = GetVoxelData<Voxel>();
     return voxels[(block.idx << BLOCK_VOLUME_BITS) + idx];
   }
 
-  __device__ __host__ int NumFreeBlocks() const;
+  __host__ int NumFreeBlocks() const;
 
  private:
+  /**
+   * @brief get pointer to the first voxel of this block
+   *
+   * @tparam Voxel  voxel type
+   *
+   * @return pointer to the first voxel of this block
+   */
   template <typename Voxel>
   __device__ constexpr Voxel* GetVoxelData() const;
 
-  VoxelRGBW *voxels_rgbw_;
-  VoxelTSDF *voxels_tsdf_;
-  VoxelSEGM *voxels_segm_;
-  int *num_free_blocks_;
-  int *heap_;
+  VoxelRGBW* voxels_rgbw_;
+  VoxelTSDF* voxels_tsdf_;
+  VoxelSEGM* voxels_segm_;
+  int* num_free_blocks_;
+  int* heap_;
 };
+
+/* template specialization for each type of voxel */
 
 template <>
 __device__ inline VoxelRGBW* VoxelMemPool::GetVoxelData<VoxelRGBW>() const {
@@ -90,4 +189,3 @@ template <>
 __device__ inline VoxelSEGM* VoxelMemPool::GetVoxelData<VoxelSEGM>() const {
   return voxels_segm_;
 }
-
