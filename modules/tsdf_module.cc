@@ -50,6 +50,12 @@ void TSDFSystem::Render(const CameraParams& virtual_cam, const SE3<float> cam_T_
 
 void TSDFSystem::Run() {
   while (true) {
+    // check for termination
+    {
+      std::lock_guard<std::mutex> lock(mtx_terminate_);
+      if (terminate_) return;
+    }
+    // pop from input queue
     std::unique_ptr<TSDFSystemInput> input;
     {
       std::lock_guard<std::mutex> lock(mtx_queue_);

@@ -9,14 +9,11 @@
 #include <thread>
 #include <utility>
 #include <vector>
-#include <utility>
 
 #include "openvslam/config.h"
 #include "openvslam/data/bow_vocabulary.h"
 #include "openvslam/system.h"
 #include "openvslam/type.h"
-
-using pose_valid_tuple = std::pair<openvslam::Mat44_t, bool>;
 
 using pose_valid_tuple = std::pair<openvslam::Mat44_t, bool>;
 

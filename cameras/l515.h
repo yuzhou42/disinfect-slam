@@ -2,7 +2,6 @@
 
 #include <librealsense2/rs.hpp>
 #include <opencv2/opencv.hpp>
-#include "utils/time.hpp"
 /**
  * @brief L515 camer interface with librealsense2
  */

@@ -22,7 +22,6 @@ double L515::DepthScale() const {
 int64_t L515::GetRGBDFrame(cv::Mat* color_img, cv::Mat* depth_img) const {
   auto frameset = pipe_.wait_for_frames();
   frameset = align_to_color_.process(frameset);
-  const auto et = GetTimestamp<std::chrono::milliseconds>();
   rs2::frame color_frame = frameset.get_color_frame();
   rs2::frame depth_frame = frameset.get_depth_frame();
 
