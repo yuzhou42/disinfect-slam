@@ -63,8 +63,6 @@ std::shared_ptr<tf2_ros::TransformListener> tfListener;
 std_msgs::Float32MultiArray::Ptr mReconstrMsg;
 geometry_msgs::TransformStamped transformStamped;
 
-
-
 void publishImage(cv_bridge::CvImagePtr & imgBrgPtr, const cv::Mat & img, ros::Publisher & pubImg, std::string imgFrameId, std::string dataType, ros::Time t){
   imgBrgPtr->header.stamp = t;
   imgBrgPtr->header.frame_id = imgFrameId;
@@ -77,12 +75,12 @@ void tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg)
 {
     static bool init = false;
     static Eigen::Isometry3d pose;
-    static geometry_msgs::TransformStamped transformStamped;
+    static geometry_msgs::TransformStamped transformStampedInit;
     if(!init){
         try{
-        transformStamped = tfBuffer.lookupTransform("world", "slam",
+        transformStampedInit = tfBuffer.lookupTransform("world", "slam",
                                 ros::Time(0));
-        pose = tf2::transformToEigen(transformStamped);
+        pose = tf2::transformToEigen(transformStampedInit);
 
         }
         catch (tf2::TransformException &ex) {
@@ -93,7 +91,7 @@ void tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg)
 
     auto values = msg->data;
     // ROS_INFO("I heard tsdf of size: ", msg->data.size());
-    const auto st = GetTimestamp<std::chrono::milliseconds>();  // nsec
+    const auto st = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
 
     int numPoints = msg->data.size()/4;
     float minValue = 1e100, maxValue = -1e100;
@@ -136,10 +134,10 @@ void tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg)
 
     std::cout<<"vertsSize: "<<vertsSize<<std::endl;
     std::cout<<"trisSize: "<<trisSize<<std::endl;
-    const auto end = GetTimestamp<std::chrono::milliseconds>();
+    const auto end = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
     std::cout<<"mesh processing time: "<<end-st<<" ms"<<std::endl;
 
-    const auto st_msg = GetTimestamp<std::chrono::milliseconds>();  
+    const auto st_msg = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());  
     shape_msgs::Mesh::Ptr mMeshMsg = boost::make_shared<shape_msgs::Mesh>();
     // geometry_msgs/Point[] 
     mMeshMsg->vertices.resize(vertsSize);
@@ -168,13 +166,12 @@ void tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg)
     // Publish arrow vector of pose
     visual_tools_->publishMesh(pose, *mMeshMsg, rviz_visual_tools::ORANGE, 1, "mesh", 1); // rviz_visual_tools::TRANSLUCENT_LIGHT
 
-    const auto end_msg = GetTimestamp<std::chrono::milliseconds>();  
+    const auto end_msg = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());  
     // Don't forget to trigger the publisher!
     visual_tools_->trigger();
 }
 
 void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSystem> my_sys,  ros::NodeHandle& mNh, tf2_ros::TransformBroadcaster& mTfSlam, bool renderFlag, double   bbox_xy, bool global_mesh) {
-  SE3<float> mSlamPose;
   std::vector<VoxelSpatialTSDF>  mSemanticReconstr;
 
   // publishers
@@ -182,9 +179,6 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
   ros::Publisher mPubL515Depth = mNh.advertise<sensor_msgs::Image>("/l515_depth", 1);
   ros::Publisher mPubZEDImgL = mNh.advertise<sensor_msgs::Image>("/zed_left_rgb", 1);
   ros::Publisher mPubZEDImgR = mNh.advertise<sensor_msgs::Image>("/zed_right_rgb", 1);
-  // ros::Publisher mPubTsdfGlobal = mNh.advertise<std_msgs::Float32MultiArray>("/tsdf_global", 4);
-  // ros::Publisher mPubTsdfLocal = mNh.advertise<std_msgs::Float32MultiArray>("/tsdf_local", 4);
-
   // cv bridges
   cv_bridge::CvImagePtr mL515RGBBrg;
   mL515RGBBrg.reset(new cv_bridge::CvImage);
@@ -206,7 +200,6 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       zedLeftMaskL = zedLeftMask.clone();
       zed_mask_lock.unlock();
       my_sys->feed_stereo_frame(img_left, img_right, timestamp, zedLeftMaskL);
-      // my_sys->feed_stereo_frame(img_left, img_right, timestamp);
 
       ros_stamp.sec = timestamp / 1000;
       ros_stamp.nsec = (timestamp % 1000) * 1000 * 1000;
@@ -225,13 +218,9 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
       const int64_t timestamp = l515.GetRGBDFrame(&img_rgb, &img_depth);
         mask_lock.lock();
         l515MaskL = l515Mask.clone();
-        // cv::imshow("mask_depth", l515MaskL);
-        // cv::waitKey(1);
         mask_lock.unlock();
-        
-
-      my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp,l515MaskL);
-      // my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp);
+      // my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp,l515MaskL);
+      my_sys->feed_rgbd_frame(img_rgb, img_depth, timestamp);
 
       ros_stamp.sec = timestamp / 1000;
       ros_stamp.nsec = (timestamp % 1000) * 1000 * 1000;
@@ -259,7 +248,7 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
     while (ros::ok()) {
         if (!global_mesh)
       {
-          const auto st = GetTimestamp<std::chrono::milliseconds>(); // nsec
+          const auto st = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
           float x_off   = transformStamped.transform.translation.x,
                 y_off   = transformStamped.transform.translation.y,
                 z_off   = transformStamped.transform.translation.z;
@@ -273,9 +262,9 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
                       z_off + z_range[1]};
       }
 
-      const auto st          = GetTimestamp<std::chrono::milliseconds>(); // nsec
+      const auto st          = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
       auto mSemanticReconstr           = my_sys->query_tsdf(volumn);
-      const auto end                   = GetTimestamp<std::chrono::milliseconds>();
+      const auto end                   = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
       last_query_time                  = end - st;
       last_query_amount                = mSemanticReconstr.size();
       std::cout << "Last queried %lu voxels " << last_query_amount << ", took " << last_query_time
@@ -297,29 +286,26 @@ void run(const ZEDNative &zed_native, const L515 &l515, std::shared_ptr<DISINFSy
     static ros::Rate rate(30);
     while(ros::ok())
     {
-      // u_int64_t tNow = std::chrono::steady_clock::now().time_since_epoch().count();  // nsec
-      // stamp.sec += tNow / 1000000000UL; //s
-      // stamp.nsec = tNow % 1000000000UL; //ns
-      u_int64_t t_query = GetTimestamp<std::chrono::milliseconds>();
-      stamp.sec  = t_query / 1000; //s
-      stamp.nsec = (t_query % 1000) * 1000 * 1000; //ns
-      mSlamPose = my_sys->query_camera_pose(t_query);
-      // pubPose(stamp, mSlamPose, mTfSlam);
-      tf2::Transform tf2_trans;
-      tf2::Transform tf2_trans_inv;
+      u_int64_t t_query = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
+      SE3<float> mSlamPose = my_sys->query_camera_pose(t_query);
 
       Eigen::Quaternion<float> R = mSlamPose.GetR();
       Eigen::Matrix<float, 3, 1> T = mSlamPose.GetT();
+      // std::cout<<"Queried pose at "<<t_query<<std::endl;
+      // std::cout<<"Rotation: "<<R.x()<<", "<< R.y()<<", "<< R.z()<<", "<<R.w()<<", "<<std::endl;
+      // std::cout<<"Translation: "<<T.x()<<", "<< T.y()<<", "<< T.z()<<", "<<std::endl;
 
+      tf2::Transform tf2_trans;
+      tf2::Transform tf2_trans_inv;
       tf2_trans.setRotation(tf2::Quaternion(R.x(), R.y(), R.z(), R.w()));
       tf2_trans.setOrigin(tf2::Vector3(T.x(), T.y(), T.z()));
 
-      tf2_trans_inv = tf2_trans.inverse();
-
+      stamp.sec  = t_query / 1000; //s
+      stamp.nsec = (t_query % 1000) * 1000 * 1000; //ns
       transformStamped.header.stamp = stamp;
       transformStamped.header.frame_id = "slam";
       transformStamped.child_frame_id = "zed";
-
+      tf2_trans_inv = tf2_trans.inverse();
       tf2::Quaternion q = tf2_trans_inv.getRotation();
       transformStamped.transform.rotation.x = q.x();
       transformStamped.transform.rotation.y = q.y();
@@ -403,6 +389,7 @@ int main(int argc, char *argv[]) {
   int devid;
   bool renderFlag;
   bool global_mesh;
+  bool require_mesh;
   double bbox_xy;
 
   mNh.getParam("/ros_disinf_slam/model_path", model_path); 
@@ -412,6 +399,8 @@ int main(int argc, char *argv[]) {
   mNh.param("/ros_disinf_slam/bbox_xy", bbox_xy, 4.0);
   mNh.param("/ros_disinf_slam/renderer", renderFlag, false);
   mNh.param("/ros_disinf_slam/global_mesh", global_mesh, true);
+  mNh.param("/ros_disinf_slam/require_mesh", require_mesh, true);
+
 
   // ROS_INFO_STREAM(calib_path);
 
