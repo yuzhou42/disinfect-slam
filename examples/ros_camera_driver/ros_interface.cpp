@@ -6,7 +6,13 @@ RosInterface::RosInterface():initT(false)
     mNh.getParam("/ros_disinf_slam/calib_path", calib_path); 
     mNh.getParam("/ros_disinf_slam/orb_vocab_path", orb_vocab_path); 
     mNh.param("/ros_disinf_slam/devid", devid, 2);
-    mNh.param("/ros_disinf_slam/bbox_xy", bbox_xy, 4.0);
+    mNh.param("/ros_disinf_slam/bbox_x_min", bbox_x_min, -8.0);
+    mNh.param("/ros_disinf_slam/bbox_x_max", bbox_x_max, 8.0);
+    mNh.param("/ros_disinf_slam/bbox_y_min", bbox_y_min, -6.0);
+    mNh.param("/ros_disinf_slam/bbox_y_max", bbox_y_max, 2.0);
+    mNh.param("/ros_disinf_slam/bbox_z_min", bbox_z_min, -8.0);
+    mNh.param("/ros_disinf_slam/bbox_z_max", bbox_z_max, 8.0);
+
     mNh.param("/ros_disinf_slam/renderer", renderFlag, false);
     mNh.param("/ros_disinf_slam/global_mesh", global_mesh, true);
     mNh.param("/ros_disinf_slam/require_mesh", require_mesh, true);
@@ -195,9 +201,9 @@ void RosInterface::run() {
       static unsigned int last_query_time = 0;
       static size_t last_query_amount = 0;
       // static float bbox = 4.0;
-      static float x_range[2] = {-bbox_xy, bbox_xy};
-      static float y_range[2] = {-bbox_xy, bbox_xy};
-      static float z_range[2]           = {0, 8};
+      static float x_range[2] = {bbox_x_min, bbox_x_max};
+      static float y_range[2] = {bbox_y_min, bbox_y_max};
+      static float z_range[2] = {bbox_z_min, bbox_z_max};
       static BoundingCube<float> volumn = {
         x_range[0], x_range[1], y_range[0], y_range[1], z_range[0], z_range[1]};
       static ros::Time stamp;

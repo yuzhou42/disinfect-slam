@@ -67,7 +67,7 @@ private:
     std::string model_path, calib_path, orb_vocab_path;
     int devid;
     bool use_mask, require_mesh, global_mesh, renderFlag;
-    double bbox_xy;
+    double bbox_x_min, bbox_x_max, bbox_y_min, bbox_y_max, bbox_z_min, bbox_z_max;
     bool initT;
 
 
