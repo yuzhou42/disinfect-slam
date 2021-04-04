@@ -68,7 +68,8 @@ private:
     int devid;
     bool use_mask, require_mesh, global_mesh, renderFlag;
     double bbox_x_min, bbox_x_max, bbox_y_min, bbox_y_max, bbox_z_min, bbox_z_max;
-    Eigen::Isometry3d T_ws;
+    // Eigen::Isometry3d T_ws;
+    geometry_msgs::Pose T_ws;
     geometry_msgs::TransformStamped transformStamped;
     image_transport::Subscriber maskLeft;
     image_transport::Subscriber maskDepth;

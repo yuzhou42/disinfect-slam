@@ -44,8 +44,13 @@ RosInterface::RosInterface()
     // poseTimer    = mNh.createTimer(ros::Duration(0.05), &RosInterface::poseTimerCallback, this);
   
     try{
-        geometry_msgs::TransformStamped transformStampedInit = tfBuffer.lookupTransform("world", "slam", ros::Time::now(), ros::Duration(3));
-        T_ws = tf2::transformToEigen(transformStampedInit);
+        geometry_msgs::TransformStamped transformStampedInit = tfBuffer.lookupTransform("world", "slam", ros::Time::now(), ros::Duration(5));
+        // T_ws = tf2::transformToEigen(transformStampedInit);
+        T_ws.position.x = transformStampedInit.transform.translation.x;
+        T_ws.position.y = transformStampedInit.transform.translation.y;
+        T_ws.position.z = transformStampedInit.transform.translation.z;
+
+        T_ws.orientation =  transformStampedInit.transform.rotation;
         std::cout<<"Init world slam transform!"<<std::endl;
     }
     catch (tf2::TransformException &ex) {
