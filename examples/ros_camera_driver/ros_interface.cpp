@@ -1,6 +1,6 @@
 #include "ros_interface.h"
 
-RosInterface::RosInterface():initT(false)
+RosInterface::RosInterface()
 {
     mNh.getParam("/ros_disinf_slam/model_path", model_path); 
     mNh.getParam("/ros_disinf_slam/calib_path", calib_path); 
@@ -29,7 +29,6 @@ RosInterface::RosInterface():initT(false)
     mZEDImgRBrg.reset(new cv_bridge::CvImage);
 
     my_sys   = std::make_shared<DISINFSystem>(calib_path, orb_vocab_path, model_path, renderFlag);
-    mReconstrMsg.reset(new std_msgs::Float32MultiArray);
     visual_tools_.reset(new rviz_visual_tools::RvizVisualTools("world","/mesh_visual", mNh));
     visual_tools_->setPsychedelicMode(false);
     visual_tools_->loadMarkerPub();
@@ -37,6 +36,16 @@ RosInterface::RosInterface():initT(false)
 
     // reconstTimer = mNh.createTimer(ros::Duration(0.2), &RosInterface::reconstTimerCallback, this);
     // poseTimer    = mNh.createTimer(ros::Duration(0.05), &RosInterface::poseTimerCallback, this);
+  
+    try{
+        geometry_msgs::TransformStamped transformStampedInit = tfBuffer.lookupTransform("world", "slam", ros::Time::now(), ros::Duration(3));
+        T_ws = tf2::transformToEigen(transformStampedInit);
+        std::cout<<"Init world slam transform!"<<std::endl;
+    }
+    catch (tf2::TransformException &ex) {
+        ROS_WARN("%s",ex.what());   
+    }
+  
     run();
 }
 
@@ -48,35 +57,16 @@ void RosInterface::publishImage(cv_bridge::CvImagePtr & imgBrgPtr, const cv::Mat
   pubImg.publish(imgBrgPtr->toImageMsg());
 }
 
-void RosInterface::tsdfCb()
+void RosInterface::tsdfCb(std::vector<VoxelSpatialTSDF> & SemanticReconstr)
 {
-    static Eigen::Isometry3d pose;
-    if(!initT){
-        try{
-            geometry_msgs::TransformStamped transformStampedInit = tfBuffer.lookupTransform("world", "slam",
-                                    ros::Time(0));
-            pose = tf2::transformToEigen(transformStampedInit);
-            std::cout<<"Init world slam transform"<<std::endl;
-            initT = true;
-
-        }
-        catch (tf2::TransformException &ex) {
-            ROS_WARN("%s",ex.what());   
-        }
-    }
-
-    auto values = mReconstrMsg->data;
-    // ROS_INFO("I heard tsdf of size: ", msg->data.size());
     const auto st = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
-
-    int numPoints = mReconstrMsg->data.size()/4;
+    int numPoints = SemanticReconstr.size();
     float minValue = 1e100, maxValue = -1e100;
     Math3D::AABB3D bbox;
-    int k=0;
-    for(int i=0;i<numPoints;i++,k+=4) {
-        minValue = Min(minValue,values[k+3]);
-        maxValue = Max(maxValue,values[k+3]);
-        bbox.expand(Math3D::Vector3(values[k],values[k+1],values[k+2]));
+    for(int i=0;i<numPoints;i++) {
+        minValue = Min(minValue,SemanticReconstr[i].tsdf);
+        maxValue = Max(maxValue,SemanticReconstr[i].tsdf);
+        bbox.expand(Math3D::Vector3(SemanticReconstr[i].position[0],SemanticReconstr[i].position[1],SemanticReconstr[i].position[2]));
     }
     // printf("Read %d points with distance in range [%g,%g]\n",numPoints,minValue,maxValue);
     // printf("   x range [%g,%g]\n",bbox.bmin.x,bbox.bmax.x);
@@ -91,35 +81,25 @@ void RosInterface::tsdfCb()
     // printf("Using cell size %g\n",CELL_SIZE);
     Geometry::SparseTSDFReconstruction tsdf(Math3D::Vector3(CELL_SIZE),truncation_distance);
     tsdf.tsdf.defaultValue[0] = truncation_distance;
-    k=0;
     Math3D::Vector3 ofs(CELL_SIZE*0.5);
-    for(int i=0;i<numPoints;i++,k+=4) {
-        tsdf.tsdf.SetValue(Math3D::Vector3(values[k],values[k+1],values[k+2])+ofs,values[k+3]);
+    for(int i=0;i<numPoints;i++) {
+        tsdf.tsdf.SetValue(Math3D::Vector3(SemanticReconstr[i].position[0],SemanticReconstr[i].position[1],SemanticReconstr[i].position[2])+ofs,SemanticReconstr[i].tsdf);
     }
 
-    // printf("Extracting mesh\n");
     Meshing::TriMesh mesh;
     tsdf.ExtractMesh(mesh);
-    // std::cout<<"Before Merge: vertsSize: "<<mesh.verts.size()<<std::endl;
     // std::cout<<"Before Merge: trisSize: "<<mesh.tris.size()<<std::endl;
-
-    // MergeVertices(mesh, 0.05);
-
+    MergeVertices(mesh, 0.05);
     int vertsSize = mesh.verts.size();
     int trisSize = mesh.tris.size();
-
     std::cout<<"trisSize: "<<trisSize<<std::endl;
     const auto end = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
     std::cout<<"mesh processing time: "<<end-st<<" ms"<<std::endl;
-
-    const auto st_msg = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());  
     shape_msgs::Mesh::Ptr mMeshMsg = boost::make_shared<shape_msgs::Mesh>();
     // geometry_msgs/Point[] 
     mMeshMsg->vertices.resize(vertsSize);
-
-    // // // shape_msgs/MeshTriangle[] 
+    // shape_msgs/MeshTriangle[] 
     mMeshMsg->triangles.resize(trisSize);
-    
 
     for(int i = 0; i < vertsSize; i++){
         mMeshMsg->vertices[i].x = mesh.verts[i].x;
@@ -135,13 +115,7 @@ void RosInterface::tsdfCb()
         // std::cout<<mesh.tris[i].a<<std::endl;
     }
     meshPub.publish(mMeshMsg);
-    // Eigen::Isometry3d pose;
-    // pose = Eigen::AngleAxisd(0, Eigen::Vector3d::UnitY()); // rotate along X axis by 45 degrees
-    // pose.translation() = Eigen::Vector3d( 0, 0, 0 ); // translate x,y,z
-    // Publish arrow vector of pose
-    visual_tools_->publishMesh(pose, *mMeshMsg, rviz_visual_tools::ORANGE, 1, "mesh", 1); // rviz_visual_tools::TRANSLUCENT_LIGHT
-
-    const auto end_msg = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());  
+    visual_tools_->publishMesh(T_ws, *mMeshMsg, rviz_visual_tools::ORANGE, 1, "mesh", 1); // rviz_visual_tools::TRANSLUCENT_LIGHT
     // Don't forget to trigger the publisher!
     visual_tools_->trigger();
 }
@@ -154,11 +128,12 @@ void RosInterface::run() {
     ros::Time ros_stamp;
     while (ros::ok()) {
       const int64_t timestamp = zed_native->GetStereoFrame(&img_left, &img_right);
+      // cv::imshow("zed_left", img_left);
+      // cv::waitKey(1);
       zed_mask_lock.lock();
       zedLeftMaskL = zedLeftMask.clone();
       zed_mask_lock.unlock();
       my_sys->feed_stereo_frame(img_left, img_right, timestamp, zedLeftMaskL);
-
       ros_stamp.sec = timestamp / 1000;
       ros_stamp.nsec = (timestamp % 1000) * 1000 * 1000;
       if(mPubZEDImgL.getNumSubscribers()>0)
@@ -206,7 +181,6 @@ void RosInterface::run() {
     while (ros::ok()) {
     if (!global_mesh)
       {
-        //   const auto st = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
           float x_off   = transformStamped.transform.translation.x,
                 y_off   = transformStamped.transform.translation.y,
                 z_off   = transformStamped.transform.translation.z;
@@ -227,13 +201,7 @@ void RosInterface::run() {
       last_query_amount                = mSemanticReconstr.size();
       std::cout << "Last queried %lu voxels " << last_query_amount << ", took " << last_query_time
                   << " ms" << std::endl;
-      int size = last_query_amount * sizeof(VoxelSpatialTSDF);
-      mReconstrMsg->data.resize(size);
-      std::memcpy(&(mReconstrMsg->data[0]),
-                  (char*)mSemanticReconstr.data(),
-                  last_query_amount * sizeof(VoxelSpatialTSDF));
-
-      tsdfCb();
+      tsdfCb(mSemanticReconstr);
       ros::spinOnce();
       rate.sleep();
     }

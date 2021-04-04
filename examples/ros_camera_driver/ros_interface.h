@@ -57,7 +57,7 @@ public:
     void publishImage(cv_bridge::CvImagePtr & imgBrgPtr, const cv::Mat & img, ros::Publisher & pubImg, std::string imgFrameId, std::string dataType, ros::Time t);
     void reconstTimerCallback(const ros::TimerEvent&);
     void poseTimerCallback(const ros::TimerEvent&);
-    void tsdfCb();
+    void tsdfCb(std::vector<VoxelSpatialTSDF> & SemanticReconstr);
     void run();
     void zedMaskCb(const sensor_msgs::ImageConstPtr& msg);
     void l515MaskCb(const sensor_msgs::ImageConstPtr& msg);
@@ -68,12 +68,8 @@ private:
     int devid;
     bool use_mask, require_mesh, global_mesh, renderFlag;
     double bbox_xy;
-    bool initT;
-
-
+    Eigen::Isometry3d T_ws;
     geometry_msgs::TransformStamped transformStamped;
-    std_msgs::Float32MultiArray::Ptr mReconstrMsg;
-
     image_transport::Subscriber maskLeft;
     image_transport::Subscriber maskDepth;
 
