@@ -46,7 +46,7 @@
 #include <chrono>
 #include <cinttypes>
 
-#define CELL_SIZE 0.05
+#define CELL_SIZE 0.01
 #define TRUNCATION_DISTANCE -0.1
 using namespace std;
 
@@ -67,7 +67,7 @@ private:
     std::string model_path, calib_path, orb_vocab_path;
     int devid;
     bool use_mask, require_mesh, global_mesh, renderFlag;
-    double bbox_xy;
+    double bbox_x_min, bbox_x_max, bbox_y_min, bbox_y_max, bbox_z_min, bbox_z_max;
     Eigen::Isometry3d T_ws;
     geometry_msgs::TransformStamped transformStamped;
     image_transport::Subscriber maskLeft;
