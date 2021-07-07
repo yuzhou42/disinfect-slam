@@ -15,6 +15,8 @@ struct simuData{
   cv::Point3f w;
   int64_t t;
 };
+
+void doRectify(const std::string& config_file_path, cv::Mat* M1l, cv::Mat* M1r, cv::Mat* M2l, cv::Mat* M2r);
 class ZED {
  public:
   ZED();
@@ -37,6 +39,7 @@ class ZED {
   void GetStereoAndRGBDFrame(cv::Mat* left_img, cv::Mat* right_img, cv::Mat* rgb_img,
                              cv::Mat* depth_img);
   void GetIMU();
+
   sl::Camera zed_;
   sl::SensorsData sensors_data_;
   sl::CameraConfiguration config_;
