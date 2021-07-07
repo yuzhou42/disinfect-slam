@@ -1,13 +1,13 @@
-add_library(sr300 sr300.cc)
-target_link_libraries(sr300
-    PUBLIC realsense2::realsense2 ${OpenCV_LIBS}
-    PRIVATE openvslam::openvslam)
+# add_library(sr300 sr300.cc)
+# target_link_libraries(sr300
+#     PUBLIC realsense2::realsense2 ${OpenCV_LIBS}
+#     PRIVATE openvslam::openvslam)
 
 add_library(l515 l515.cc)
-target_link_libraries(l515 PUBLIC realsense2::realsense2 openvslam::openvslam utils)
+target_link_libraries(l515 PUBLIC realsense2::realsense2 spdlog ${OpenCV_LIBS})
 
-add_library(zed_native zed_native.cc)
-target_link_libraries(zed_native PUBLIC ${OpenCV_LIBS} openvslam::openvslam utils)
+# add_library(zed_native zed_native.cc)
+# target_link_libraries(zed_native PUBLIC ${OpenCV_LIBS} openvslam::openvslam utils)
 
 add_library(zed_sdk INTERFACE)
 target_link_libraries(zed_sdk INTERFACE ${ZED_LIBRARIES})
@@ -18,6 +18,5 @@ target_compile_options(zed_sdk INTERFACE -Wno-deprecated-declarations)
 if (${ZED_FOUND})
     add_library(zed zed.cc)
     target_link_libraries(zed
-        PUBLIC zed_sdk
-        PRIVATE openvslam::openvslam)
+        PUBLIC zed_sdk ${OpenCV_LIBS})
 endif (${ZED_FOUND})

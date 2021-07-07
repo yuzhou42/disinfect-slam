@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(disinfslam LANGUAGES CXX C CUDA)
+
+IF(NOT CMAKE_BUILD_TYPE)
+  SET(CMAKE_BUILD_TYPE Debug)
+ENDIF()
+
 set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
 set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
@@ -18,9 +23,10 @@ FIND_PACKAGE(Klampt REQUIRED)
 ADD_DEFINITIONS(${KLAMPT_DEFINITIONS})
 INCLUDE_DIRECTORIES(${KLAMPT_INCLUDE_DIRS})
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# set(CMAKE_PREFIX_PATH "/home/yu/.local2")
 
 find_package(catkin REQUIRED COMPONENTS
     roscpp
@@ -45,31 +51,37 @@ find_package(GLUT REQUIRED)
 find_package(OpenGL REQUIRED)
 # Slam
 find_package(Eigen3 3.3.8 EXACT REQUIRED)
-find_package(openvslam REQUIRED)
+# find_package(openvslam REQUIRED)
 find_package(Pangolin REQUIRED) # TODO(alvin): to be completely replaced by Dear ImGUI
-find_package(OpenCV REQUIRED)
-find_package(yaml-cpp REQUIRED)
+find_package(OpenCV EXACT 3.2.0)
+find_package(yaml-cpp EXACT 0.6.3)
 # Zed SDK (optional)
 find_package(ZED 3 REQUIRED)
 # Camera SDKs
 find_package(realsense2 REQUIRED)
-find_package(OpenCV REQUIRED)
+# find_package(OpenCV REQUIRED)
 # DL Inference
 find_package(Torch QUIET HINTS ${CMAKE_SOURCE_DIR}/third_party/libtorch)
 if (NOT Torch_FOUND)
     MESSAGE(WARNING "libtorch not found. Excluding DL inference engine and examples.")
 endif()
 
+# find_package(ORB_SLAM3   EXACT PATHS /home/yu/.local3/share/eigen3 )
 
 # enable testing
 # enable_testing()
 # include(GoogleTest)
 
 # Compile Flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mtune=native -march=native")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mtune=native -march=native")
+# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mtune=native -march=native")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mtune=native -march=native")
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall  -O2 -march=native ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall  -O2 -march=native")
 
 catkin_package()
+
+set(ORB_DIR "/home/yu/git_ws/ORB_SLAM3")
 
 include_directories(
     ${CMAKE_SOURCE_DIR}
@@ -77,16 +89,35 @@ include_directories(
     ${GLUT_INCLUDE_DIRS}
     ${catkin_INCLUDE_DIRS}
     ${KLAMPT_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIR}
+    ${Pangolin_INCLUDE_DIRS}
+    ${ORB_DIR}
+    ${ORB_DIR}/include
+    ${ORB_DIR}/include/CameraModels  
+)
+
+set(ORB_SLAM3_LIBS 
+    ${OpenCV_LIBS} 
+    ${EIGEN3_LIBS}
+    ${Pangolin_LIBRARIES}
+    ${ORB_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
+    ${ORB_DIR}/Thirdparty/g2o/lib/libg2o.so
+    ${ORB_DIR}/lib/libORB_SLAM3.so
+    -lboost_system
+    -lboost_serialization
+    -lcrypto
 )
 # Interface wrapper lib for OpenVSLAM
-add_library(openvslam INTERFACE)
-target_link_libraries(openvslam
-    INTERFACE popl openvslam::openvslam openvslam::pangolin_viewer)
+# add_library(openvslam INTERFACE)
+# target_link_libraries(openvslam
+#     INTERFACE popl openvslam::openvslam openvslam::pangolin_viewer)
 
 add_subdirectory(third_party)
 add_subdirectory(utils)
 add_subdirectory(cameras)
 add_subdirectory(modules)
+# add_subdirectory(${ORB_DIR} ${ORB_DIR}+"/build2")
+
 if (TORCH_FOUND)
     add_subdirectory(segmentation)
     add_subdirectory(disinfect_slam)
