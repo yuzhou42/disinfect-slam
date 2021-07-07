@@ -167,3 +167,13 @@ Viewer.ViewpointY: -0.7
 Viewer.ViewpointZ: -1.8
 Viewer.ViewpointF: 500
 
+# extrinsics from l515 to zed
+Extrinsics: 
+   [
+     0.9995,  -0.0097,  0.0289,  -37.172e-3,
+     0.009,    0.9997,  0.0247,  -22.6717e-3,
+    -0.0291,  -0.0245,  0.9993,   2.4699e-3,
+     0,         0,      0,        1
+   ]
+
+depthmap_factor: 4000
