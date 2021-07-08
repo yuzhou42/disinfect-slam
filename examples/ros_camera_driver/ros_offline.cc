@@ -10,15 +10,27 @@ SyncSubscriber::SyncSubscriber()
     nh_.param("/ros_offline_orb3/use_mask", use_mask, false);
     nh_.param("/ros_offline_orb3/global_mesh", global_mesh, true);
     nh_.param("/ros_offline_orb3/do_rectify", do_rectify, true);
-
-    image_transport::ImageTransport it(nh_);
-
+    int sensor;
+    nh_.param("/ros_offline_orb3/sensor", sensor, 4); 
+    switch (sensor)
+    {
+    case 1:
+      mSensor = ORB_SLAM3::System::STEREO;
+      std::cout << "Stereo" << std::endl;
+      break;
+    case 4:
+      mSensor = ORB_SLAM3::System::IMU_STEREO;
+      std::cout << "Stereo - inertial " << std::endl;
+      break;
+    }
+        // enum eSensor{MONOCULAR=0,STEREO=1,RGBD=2,IMU_MONOCULAR=3,ORB_SLAM3::System::eSensor::IMU_STEREO=4
+    // image_transport::ImageTransport it(nh_);
     // stereoLeft.subscribe(it, "/stereoLeft", 3);
     // stereoRight.subscribe(it, "/stereoRight", 3);
-    depth.subscribe(it, "/depth", 3);
-    rgbImg.subscribe(it, "/rgbImg", 3);
+    // depth.subscribe(it, "/depth", 3);
+    // rgbImg.subscribe(it, "/rgbImg", 3);
     // maskLeft.subscribe(it, "/maskLeft", 3);
-    maskDepth.subscribe(it, "/maskDepth", 3);
+    // maskDepth.subscribe(it, "/maskDepth", 3);
 
     mpImuGb = std::make_shared<ImuGrabber>();
     mpIgb = std::make_shared<ImageGrabber>();
@@ -27,7 +39,8 @@ SyncSubscriber::SyncSubscriber()
     sub_imu = nh_.subscribe("/zed2/zed_node/imu/data", 10, &ImuGrabber::GrabImu, this->mpImuGb.get()); 
     sub_img_left = nh_.subscribe("/zed2/zed_node/left_raw/image_raw_color", 5, &ImageGrabber::GrabImageLeft, this->mpIgb.get() );
     sub_img_right = nh_.subscribe("/zed2/zed_node/right_raw/image_raw_color", 5, &ImageGrabber::GrabImageRight, this->mpIgb.get());
-
+    // sub_img_depth = nh_.subscribe("/camera/aligned_depth_to_color/image_raw", 5, &ImageGrabber::GrabImageDepth, this->mpIgb.get() );
+    // sub_img_rgb = nh_.subscribe("/camera/color/image_raw", 5, &ImageGrabber::GrabImageRgb, this->mpIgb.get());
     // publishers
     // mPubTsdfGlobal = nh_.advertise<std_msgs::Float32MultiArray>("/tsdf_global", 4);
     // mPubTsdfLocal  = nh_.advertise<std_msgs::Float32MultiArray>("/tsdf_local", 4);
@@ -52,9 +65,9 @@ SyncSubscriber::SyncSubscriber()
 
     // auto cfg = GetAndSetConfig(calib_path);
     doRectify(calib_path, &M1l, &M1r, &M2l, &M2r);
-    my_sys   = std::make_shared<DISINFSystem>(calib_path, orb_vocab_path, model_path, renderFlag);
-    mpSLAM = std::make_shared<ORB_SLAM3::System>(orb_vocab_path, calib_path,
-                         ORB_SLAM3::System::IMU_STEREO, renderFlag);
+    my_sys   = std::make_shared<DISINFSystem>(calib_path, orb_vocab_path, model_path, mSensor, renderFlag);
+    // mpSLAM = std::make_shared<ORB_SLAM3::System>(orb_vocab_path, calib_path,
+    //                      ORB_SLAM3::System::ORB_SLAM3::System::IMU_STEREO, renderFlag);
 
     mReconstrMsg.reset(new std_msgs::Float32MultiArray);
     visual_tools_.reset(new rviz_visual_tools::RvizVisualTools("world","/mesh_visual", nh_));
@@ -77,7 +90,57 @@ SyncSubscriber::SyncSubscriber()
         ROS_WARN("%s",ex.what());   
         }
     mslamTh = std::thread(&SyncSubscriber::slamTh, this);
+    mReconstTh = std::thread(&SyncSubscriber::reconstTh, this);
 
+}
+
+void SyncSubscriber::reconstTh()
+{
+  const double maxTimeDiff = 0.01;
+
+  while(true){
+    cv::Mat imDepth, imRgb;
+    double tlmDepth = 0, tlmRgb = 0;
+    if (!mpIgb->imgDepthBuf.empty()&&!mpIgb->imgRgbBuf.empty())
+    {
+      tlmDepth = mpIgb->imgDepthBuf.front()->header.stamp.toSec();
+      tlmRgb = mpIgb->imgRgbBuf.front()->header.stamp.toSec();
+
+      mpIgb->mBufMutexRgb.lock();
+      while((tlmDepth-tlmRgb)>maxTimeDiff && mpIgb->imgRgbBuf.size()>1)
+      {
+        mpIgb->imgRgbBuf.pop();
+        tlmRgb = mpIgb->imgRgbBuf.front()->header.stamp.toSec();
+      }
+      mpIgb->mBufMutexRgb.unlock();
+
+      mpIgb->mBufMutexDepth.lock();
+      while((tlmRgb-tlmDepth)>maxTimeDiff && mpIgb->imgDepthBuf.size()>1)
+      {
+        mpIgb->imgDepthBuf.pop();
+        tlmDepth = mpIgb->imgDepthBuf.front()->header.stamp.toSec();
+      }
+      mpIgb->mBufMutexDepth.unlock();
+
+      if((tlmDepth-tlmRgb)>maxTimeDiff || (tlmRgb-tlmDepth)>maxTimeDiff)
+      {
+        std::cout << "big time difference" << std::endl;
+        continue;
+      }
+
+      mpIgb->mBufMutexDepth.lock();
+      imDepth = mpIgb->GetImage(mpIgb->imgDepthBuf.front(), "16UC1");
+      mpIgb->imgDepthBuf.pop();
+      mpIgb->mBufMutexDepth.unlock();
+
+      mpIgb->mBufMutexRgb.lock();
+      imRgb = mpIgb->GetImage(mpIgb->imgRgbBuf.front());
+      mpIgb->imgRgbBuf.pop();
+      mpIgb->mBufMutexRgb.unlock();
+
+      my_sys->feed_rgbd_frame(imRgb, imDepth, int64_t(tlmDepth*1e3));
+    }
+  }
 }
 
 void SyncSubscriber::slamTh()
@@ -88,7 +151,7 @@ void SyncSubscriber::slamTh()
   {
     cv::Mat imLeft, imRight;
     double tImLeft = 0, tImRight = 0;
-    if (!mpIgb->imgLeftBuf.empty()&&!mpIgb->imgRightBuf.empty()&&!mpImuGb->imuBuf.empty())
+    if (!mpIgb->imgLeftBuf.empty()&&!mpIgb->imgRightBuf.empty()&&(!mpImuGb->imuBuf.empty() || mSensor != ORB_SLAM3::System::IMU_STEREO ))
     {
       tImLeft = mpIgb->imgLeftBuf.front()->header.stamp.toSec();
       tImRight = mpIgb->imgRightBuf.front()->header.stamp.toSec();
@@ -114,8 +177,6 @@ void SyncSubscriber::slamTh()
         // std::cout << "big time difference" << std::endl;
         continue;
       }
-      if(tImLeft>mpImuGb->imuBuf.back()->header.stamp.toSec())
-          continue;
 
       mpIgb->mBufMutexLeft.lock();
       imLeft = mpIgb->GetImage(mpIgb->imgLeftBuf.front());
@@ -127,32 +188,40 @@ void SyncSubscriber::slamTh()
       mpIgb->imgRightBuf.pop();
       mpIgb->mBufMutexRight.unlock();
 
-      vector<ORB_SLAM3::IMU::Point> vImuMeas;
-      mpImuGb->mBufMutex.lock();
-      if(!mpImuGb->imuBuf.empty())
-      {
-        // Load imu measurements from buffer
-        vImuMeas.clear();
-        while(!mpImuGb->imuBuf.empty() && mpImuGb->imuBuf.front()->header.stamp.toSec()<=tImLeft)
-        {
-          double t = mpImuGb->imuBuf.front()->header.stamp.toSec();
-          // std::cout<<"t_imu: "<<t<<std::endl;
-          cv::Point3f acc(mpImuGb->imuBuf.front()->linear_acceleration.x, mpImuGb->imuBuf.front()->linear_acceleration.y, mpImuGb->imuBuf.front()->linear_acceleration.z);
-          cv::Point3f gyr(mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z);
-          vImuMeas.push_back(ORB_SLAM3::IMU::Point(acc,gyr,t));
-          mpImuGb->imuBuf.pop();
-        }
-      }
-      mpImuGb->mBufMutex.unlock();
-
       if(do_rectify)
       {
         cv::remap(imLeft,imLeft,M1l,M2l,cv::INTER_LINEAR);
         cv::remap(imRight,imRight,M1r,M2r,cv::INTER_LINEAR);
       }
 
-//     // my_sys->feed_stereo_IMU(img_left, img_right, int64_t(timeDiff * 1e9), vImuMeas);
-      Tcw = mpSLAM->TrackStereo(imLeft,imRight,tImLeft,vImuMeas);
+      if(mSensor == ORB_SLAM3::System::IMU_STEREO)
+      {
+        if(tImLeft>mpImuGb->imuBuf.back()->header.stamp.toSec())
+          continue;
+        mpImuGb->mBufMutex.lock();
+        if(!mpImuGb->imuBuf.empty())
+        {
+          // Load imu measurements from buffer
+          vImuMeas.clear();
+          while(!mpImuGb->imuBuf.empty() && mpImuGb->imuBuf.front()->header.stamp.toSec()<=tImLeft)
+          {
+            double t = mpImuGb->imuBuf.front()->header.stamp.toSec();
+            // std::cout<<"t_imu: "<<t<<std::endl;
+            cv::Point3f acc(mpImuGb->imuBuf.front()->linear_acceleration.x, mpImuGb->imuBuf.front()->linear_acceleration.y, mpImuGb->imuBuf.front()->linear_acceleration.z);
+            cv::Point3f gyr(mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z);
+            vImuMeas.push_back(ORB_SLAM3::IMU::Point(acc,gyr,t));
+            mpImuGb->imuBuf.pop();
+          }
+        }
+        mpImuGb->mBufMutex.unlock();
+        std::cout<<vImuMeas.size()<<std::endl;
+        my_sys->feed_stereo_IMU(imLeft, imRight, tImLeft, vImuMeas);
+      }
+      else if(mSensor == ORB_SLAM3::System::STEREO)
+        my_sys->feed_stereo(imLeft, imRight, tImLeft);
+        // my_sys->feed_stereo(imLeft, imRight, tImLeft, vImuMeas);
+
+      // Tcw = mpSLAM->TrackStereo(imLeft,imRight,tImLeft,vImuMeas);
       // std::cout << "Tcw: " << Tcw << std::endl;
       // if(!Tcw.empty()){
       //   Eigen::Matrix<float, 4, 4> eigenT;
@@ -189,30 +258,6 @@ void SyncSubscriber::slamTh()
   }
 }
 
-void SyncSubscriber::depthCb(const ImageConstPtr& rgbImg, const ImageConstPtr& depth)
-{
-    cv::Mat img_rgb         = cv_bridge::toCvShare(rgbImg, "rgb8")->image.clone();
-    cv::Mat img_depth       = cv_bridge::toCvShare(depth, "16UC1")->image.clone(); //mono16/16UC1
-    // static double initTime = rgbImg->header.stamp.toSec()*1e9;
-    double timestamp = rgbImg->header.stamp.toSec()*1e3;
-    // double timeDiff = timestamp-initTime;
-    my_sys->feed_rgbd_frame(img_rgb, img_depth, int64_t(timestamp));
-}
-
-void SyncSubscriber::depthCb(const ImageConstPtr& rgbImg,
-                            const ImageConstPtr& depth,
-                            const ImageConstPtr& maskDepth)
-{
-    ROS_INFO("got stereo data");
-    cv::Mat img_rgb   = cv_bridge::toCvShare(rgbImg, "rgb8")->image.clone();
-    cv::Mat img_depth = cv_bridge::toCvShare(depth, "16UC1")->image.clone();
-    cv::Mat l515MaskL = cv_bridge::toCvShare(maskDepth, "8UC1")->image.clone();
-    static double initTime = rgbImg->header.stamp.toSec()*1e9;
-    const int64_t timestamp = rgbImg->header.stamp.toSec()*1e9;
-    double timeDiff = timestamp-initTime;
-
-    my_sys->feed_rgbd_frame(img_rgb, img_depth, int64_t(timeDiff), l515MaskL);
-}
 
 void SyncSubscriber::tsdfCb(std::vector<VoxelSpatialTSDF> & SemanticReconstr)
 {
@@ -290,7 +335,7 @@ void SyncSubscriber::reconstTimerCallback(const ros::TimerEvent&)
 
     if (!global_mesh)
     {
-        const auto st = GetTimestamp<std::chrono::milliseconds>(); // nsec
+        // const auto st = GetTimestamp<std::chrono::milliseconds>(); // nsec
         float x_off   = transformStamped.transform.translation.x,
               y_off   = transformStamped.transform.translation.y,
               z_off   = transformStamped.transform.translation.z;
@@ -373,39 +418,125 @@ void ImageGrabber::GrabImageRight(const sensor_msgs::ImageConstPtr &img_msg)
   mBufMutexRight.unlock();
 }
 
-cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
+void ImageGrabber::GrabImageDepth(const sensor_msgs::ImageConstPtr &img_msg)
+{
+  mBufMutexDepth.lock();
+//   if (!imgLeftBuf.empty())
+//     imgLeftBuf.pop();
+  imgDepthBuf.push(img_msg);
+  mBufMutexDepth.unlock();
+}
+
+void ImageGrabber::GrabImageRgb(const sensor_msgs::ImageConstPtr &img_msg)
+{
+  mBufMutexRgb.lock();
+//   if (!imgRightBuf.empty())
+//     imgRightBuf.pop();
+  imgRgbBuf.push(img_msg);
+  mBufMutexRgb.unlock();
+}
+
+
+cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg, string type)
 {
   // Copy the ros image message to cv::Mat.
   cv_bridge::CvImageConstPtr cv_ptr;
   try
   {
-    cv_ptr = cv_bridge::toCvShare(img_msg, sensor_msgs::image_encodings::MONO8);
+    cv_ptr = cv_bridge::toCvShare(img_msg, type);
+    // sensor_msgs::image_encodings::MONO8
   }
   catch (cv_bridge::Exception& e)
   {
     ROS_ERROR("cv_bridge exception: %s", e.what());
   }
-  
-  if(cv_ptr->image.type()==0)
-  {
-    return cv_ptr->image.clone();
-  }
-  else
-  {
-    std::cout << "Error type" << std::endl;
-    return cv_ptr->image.clone();
-  }
+
+  return cv_ptr->image.clone();
 }
 
 
 void ImuGrabber::GrabImu(const sensor_msgs::ImuConstPtr &imu_msg)
 {
+  // std::cout<<"got imu"<<std::endl;
 
   mBufMutex.lock();
   imuBuf.push(imu_msg);
   mBufMutex.unlock();
   return;
 }
+
+// double ImageGrabber::syncImages(queue<sensor_msgs::ImageConstPtr>& imagebuf1, queue<sensor_msgs::ImageConstPtr>& imagebuf2, std::mutex& lock1, std::mutex& lock2,  cv::Mat& image1, cv::Mat& image2 )
+// {
+//   const double maxTimeDiff = 0.01;
+//   double t1 = 0, t2 = 0;
+//   if (!imagebuf1.empty()&&!imagebuf2.empty())
+//     {
+//       t1 = imagebuf1.front()->header.stamp.toSec();
+//       t2 = imagebuf2.front()->header.stamp.toSec();
+
+//       lock2.lock();
+//       while((t1-t2)>maxTimeDiff && imagebuf2.size()>1)
+//       {
+//         imagebuf2.pop();
+//         t2 = imagebuf2.front()->header.stamp.toSec();
+//       }
+//       lock2.unlock();
+
+//       lock1.lock();
+//       while((t2-t1)>maxTimeDiff && imagebuf1.size()>1)
+//       {
+//         imagebuf1.pop();
+//         t1 = imagebuf1.front()->header.stamp.toSec();
+//       }
+//       lock1.unlock();
+
+//       if((t1-t2)>maxTimeDiff || (t2-t1)>maxTimeDiff)
+//       {
+//         std::cout << "big time difference" << std::endl;
+//         return 0; 
+//       }
+
+//       lock1.lock();
+//       image1 = GetImage(imagebuf1.front());
+//       imagebuf1.pop();
+//       lock1.unlock();
+
+//       lock2.lock();
+//       image2 = GetImage(imagebuf2.front());
+//       imagebuf2.pop();
+//       lock2.unlock();
+//       return t1;
+//     }
+//     return 0;
+// }
+
+
+// void SyncSubscriber::depthCb(const ImageConstPtr& rgbImg, const ImageConstPtr& depth)
+// {
+//     mDepthMutex.lock();
+//     img_rgb         = cv_bridge::toCvShare(rgbImg, "rgb8")->image.clone();
+//     img_depth       = cv_bridge::toCvShare(depth, "16UC1")->image.clone(); //mono16/16UC1
+//     mDepthMutex.unlock();
+//     // static double initTime = rgbImg->header.stamp.toSec()*1e9;
+//     double timestamp = rgbImg->header.stamp.toSec()*1e3;
+//     // double timeDiff = timestamp-initTime;
+//     my_sys->feed_rgbd_frame(img_rgb, img_depth, int64_t(timestamp));
+// }
+
+// void SyncSubscriber::depthCb(const ImageConstPtr& rgbImg,
+//                             const ImageConstPtr& depth,
+//                             const ImageConstPtr& maskDepth)
+// {
+//     ROS_INFO("got stereo data");
+//     cv::Mat img_rgb   = cv_bridge::toCvShare(rgbImg, "rgb8")->image.clone();
+//     cv::Mat img_depth = cv_bridge::toCvShare(depth, "16UC1")->image.clone();
+//     cv::Mat l515MaskL = cv_bridge::toCvShare(maskDepth, "8UC1")->image.clone();
+//     static double initTime = rgbImg->header.stamp.toSec()*1e9;
+//     const int64_t timestamp = rgbImg->header.stamp.toSec()*1e9;
+//     double timeDiff = timestamp-initTime;
+
+//     my_sys->feed_rgbd_frame(img_rgb, img_depth, int64_t(timeDiff), l515MaskL);
+// }
 
 
 // void SyncSubscriber::stereoCb(const ImageConstPtr& stereoLeft,

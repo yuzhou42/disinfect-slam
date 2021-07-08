@@ -80,22 +80,19 @@ public:
     ImageGrabber(){
         imgLeftBuf = queue<sensor_msgs::ImageConstPtr>();
         imgRightBuf = queue<sensor_msgs::ImageConstPtr>();
+        imgDepthBuf = queue<sensor_msgs::ImageConstPtr>();
+        imgRgbBuf = queue<sensor_msgs::ImageConstPtr>();
         std::cout<<"initialize image grabber"<<std::endl;
     };
     void GrabImageLeft(const sensor_msgs::ImageConstPtr& msg);
     void GrabImageRight(const sensor_msgs::ImageConstPtr& msg);
-    cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg);
-    // void SyncWithImu();
-
-    queue<sensor_msgs::ImageConstPtr> imgLeftBuf, imgRightBuf;
-    std::mutex mBufMutexLeft,mBufMutexRight;
+    void GrabImageDepth(const sensor_msgs::ImageConstPtr& msg);
+    void GrabImageRgb(const sensor_msgs::ImageConstPtr& msg);
+    // double syncImages(  queue<sensor_msgs::ImageConstPtr>& imagebuf1,  queue<sensor_msgs::ImageConstPtr>& imagebuf2, std::mutex& lock1, std::mutex& lock2, cv::Mat& image1, cv::Mat& image2);
+    cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg, string type = "rgb8");
+    queue<sensor_msgs::ImageConstPtr> imgLeftBuf, imgRightBuf, imgDepthBuf, imgRgbBuf;
+    std::mutex mBufMutexLeft,mBufMutexRight,mBufMutexDepth, mBufMutexRgb;
    
-    // ORB_SLAM3::System* mpSLAM;
-    // ImuGrabber *mpImuGb;
-
-    // const bool do_rectify;
-    // cv::Mat M1l,M2l,M1r,M2r;
-
     // const bool mbClahe;
     // cv::Ptr<cv::CLAHE> mClahe = cv::createCLAHE(3.0, cv::Size(8, 8));
 };
@@ -105,8 +102,7 @@ class SyncSubscriber
 public:
     SyncSubscriber();
     // void stereoCb(const ImageConstPtr& stereoLeft, const ImageConstPtr& stereoRight);
-    void ImuCb(const sensor_msgs::ImuConstPtr &imu_msg);
-
+    // void ImuCb(const sensor_msgs::ImuConstPtr &imu_msg);
     // void stereoCb(const ImageConstPtr& stereoLeft, const ImageConstPtr& stereoRight, const ImageConstPtr& maskLeft);
 
     void depthCb(const ImageConstPtr& rgbImg, const ImageConstPtr& depth);
@@ -116,7 +112,7 @@ public:
     void poseTimerCallback(const ros::TimerEvent&);
     void tsdfCb(std::vector<VoxelSpatialTSDF> & SemanticReconstr);
     void slamTh();
-    // void startTh();
+    void reconstTh();
 
 private:
     ros::NodeHandle nh_;
@@ -131,10 +127,9 @@ private:
     geometry_msgs::TransformStamped transformStamped;
     std_msgs::Float32MultiArray::Ptr mReconstrMsg;
     geometry_msgs::Pose T_ws;
-    // ros::Subscriber sub_imu; 
     // initialize slam
     std::shared_ptr<DISINFSystem> my_sys;
-    std::shared_ptr<ORB_SLAM3::System> mpSLAM; 
+    // std::shared_ptr<ORB_SLAM3::System> mpSLAM; 
     // message_filters::Subscriber<sensor_msgs::Image> sub_1_;
     // message_filters::Subscriber<sensor_msgs::Image> sub_2_;
 
@@ -161,16 +156,27 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tfListener;
     cv::Mat M1l,M2l,M1r,M2r;
     cv::Mat img_left, img_right;
+    cv::Mat img_rgb;
+    cv::Mat img_depth;
     queue<sensor_msgs::ImuConstPtr> imuBuf;    //IMU temp buffer
     std::mutex mBufMutex; //lock for imu buffer
+    std::mutex mDepthMutex; //lock for depth  
+
     std::shared_ptr<ImuGrabber> mpImuGb;
     std::shared_ptr<ImageGrabber> mpIgb;
     // ImuGrabber* mpImuGb;
     // ImageGrabber* mpIgb;
     std::thread mslamTh;
+    std::thread mReconstTh;
+
     ros::Subscriber sub_imu;
     ros::Subscriber sub_img_left;
     ros::Subscriber sub_img_right;
+    ros::Subscriber sub_img_depth;
+    ros::Subscriber sub_img_rgb;
     cv::Mat Tcw;
+    ORB_SLAM3::System::eSensor mSensor;
+    vector<ORB_SLAM3::IMU::Point> vImuMeas;
+
 };
 
