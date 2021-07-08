@@ -1,6 +1,6 @@
 #include "syncSubscriber.h"
 
-SyncSubsriber::SyncSubsriber()
+SyncSubscriber::SyncSubscriber()
 {
     nh_.getParam("/simulate_disinf_slam/model_path", model_path);
     nh_.getParam("/simulate_disinf_slam/calib_path", calib_path);
@@ -26,22 +26,22 @@ SyncSubsriber::SyncSubsriber()
     if (use_mask)
     {
         sync3_stereo_.reset(new Sync3(MySyncPolicy3(10), stereoLeft, stereoRight, maskLeft));
-        sync3_stereo_->registerCallback(boost::bind(&SyncSubsriber::stereoCb, this, _1, _2, _3));
+        sync3_stereo_->registerCallback(boost::bind(&SyncSubscriber::stereoCb, this, _1, _2, _3));
 
         sync3_depth_.reset(new Sync3(MySyncPolicy3(10), rgbImg, depth, maskDepth));
-        sync3_depth_->registerCallback(boost::bind(&SyncSubsriber::depthCb, this, _1, _2, _3));
+        sync3_depth_->registerCallback(boost::bind(&SyncSubscriber::depthCb, this, _1, _2, _3));
     }
     else
     {
         sync2_stereo_.reset(new Sync2(MySyncPolicy2(10), stereoLeft, stereoRight));
-        sync2_stereo_->registerCallback(boost::bind(&SyncSubsriber::stereoCb, this, _1, _2));
+        sync2_stereo_->registerCallback(boost::bind(&SyncSubscriber::stereoCb, this, _1, _2));
 
         sync2_depth_.reset(new Sync2(MySyncPolicy2(10), rgbImg, depth));
-        sync2_depth_->registerCallback(boost::bind(&SyncSubsriber::depthCb, this, _1, _2));
+        sync2_depth_->registerCallback(boost::bind(&SyncSubscriber::depthCb, this, _1, _2));
     }
 
-    reconstTimer = nh_.createTimer(ros::Duration(0.2), &SyncSubsriber::reconstTimerCallback, this);
-    poseTimer    = nh_.createTimer(ros::Duration(0.05), &SyncSubsriber::poseTimerCallback, this);
+    reconstTimer = nh_.createTimer(ros::Duration(0.2), &SyncSubscriber::reconstTimerCallback, this);
+    poseTimer    = nh_.createTimer(ros::Duration(0.05), &SyncSubscriber::poseTimerCallback, this);
 
     // ROS_INFO_STREAM(calib_path);
 
@@ -53,9 +53,23 @@ SyncSubsriber::SyncSubsriber()
     visual_tools_->loadMarkerPub();
     tfListener= std::make_shared<tf2_ros::TransformListener>(tfBuffer);
     meshPub = nh_.advertise<shape_msgs::Mesh>("/mesh", 1);
+
+    try{
+        geometry_msgs::TransformStamped transformStampedInit = tfBuffer.lookupTransform("world", "slam", ros::Time::now(), ros::Duration(5));
+        // T_ws = tf2::transformToEigen(transformStampedInit);
+        T_ws.position.x = transformStampedInit.transform.translation.x;
+        T_ws.position.y = transformStampedInit.transform.translation.y;
+        T_ws.position.z = transformStampedInit.transform.translation.z;
+
+        T_ws.orientation =  transformStampedInit.transform.rotation;
+        std::cout<<"Init world slam transform!"<<std::endl;
+        }
+        catch (tf2::TransformException &ex) {
+        ROS_WARN("%s",ex.what());   
+        }
 }
 
-void SyncSubsriber::stereoCb(const ImageConstPtr& stereoLeft, const ImageConstPtr& stereoRight)
+void SyncSubscriber::stereoCb(const ImageConstPtr& stereoLeft, const ImageConstPtr& stereoRight)
 {
     cv::Mat img_left        = cv_bridge::toCvShare(stereoLeft, "bgr8")->image;
     cv::Mat img_right       = cv_bridge::toCvShare(stereoRight, "bgr8")->image;
@@ -66,7 +80,7 @@ void SyncSubsriber::stereoCb(const ImageConstPtr& stereoLeft, const ImageConstPt
     my_sys->feed_stereo_frame(img_left, img_right, int64_t(timeDiff));
 }
 
-void SyncSubsriber::depthCb(const ImageConstPtr& rgbImg, const ImageConstPtr& depth)
+void SyncSubscriber::depthCb(const ImageConstPtr& rgbImg, const ImageConstPtr& depth)
 {
     cv::Mat img_rgb         = cv_bridge::toCvShare(rgbImg, "rgb8")->image;
     cv::Mat img_depth       = cv_bridge::toCvShare(depth, "16UC1")->image; //mono16/16UC1
@@ -76,7 +90,7 @@ void SyncSubsriber::depthCb(const ImageConstPtr& rgbImg, const ImageConstPtr& de
     my_sys->feed_rgbd_frame(img_rgb, img_depth, int64_t(timeDiff));
 }
 
-void SyncSubsriber::stereoCb(const ImageConstPtr& stereoLeft,
+void SyncSubscriber::stereoCb(const ImageConstPtr& stereoLeft,
                              const ImageConstPtr& stereoRight,
                              const ImageConstPtr& maskLeft)
 {
@@ -91,7 +105,7 @@ void SyncSubsriber::stereoCb(const ImageConstPtr& stereoLeft,
     my_sys->feed_stereo_frame(img_left, img_right, int64_t(timeDiff), zedLeftMaskL);
 }
 
-void SyncSubsriber::depthCb(const ImageConstPtr& rgbImg,
+void SyncSubscriber::depthCb(const ImageConstPtr& rgbImg,
                             const ImageConstPtr& depth,
                             const ImageConstPtr& maskDepth)
 {
@@ -106,80 +120,49 @@ void SyncSubsriber::depthCb(const ImageConstPtr& rgbImg,
     my_sys->feed_rgbd_frame(img_rgb, img_depth, int64_t(timeDiff), l515MaskL);
 }
 
-void SyncSubsriber::tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg)
+void SyncSubscriber::tsdfCb(std::vector<VoxelSpatialTSDF> & SemanticReconstr)
 {
-    static bool init = false;
-    static Eigen::Isometry3d pose;
-    static geometry_msgs::TransformStamped transformStamped;
-    if(!init){
-        try{
-        transformStamped = tfBuffer.lookupTransform("world", "slam",
-                                ros::Time(0));
-        pose = tf2::transformToEigen(transformStamped);
-
-        }
-        catch (tf2::TransformException &ex) {
-        ROS_WARN("%s",ex.what());
-        }
-        init = true;
-    }
-
-    auto values = msg->data;
-    ROS_INFO("I heard tsdf of size: ", msg->data.size());
-    const auto st = GetTimestamp<std::chrono::milliseconds>();  // nsec
-
-    int numPoints = msg->data.size()/4;
+    const auto st = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
+    int numPoints = SemanticReconstr.size();
     float minValue = 1e100, maxValue = -1e100;
     Math3D::AABB3D bbox;
-    int k=0;
-    for(int i=0;i<numPoints;i++,k+=4) {
-        minValue = Min(minValue,values[k+3]);
-        maxValue = Max(maxValue,values[k+3]);
-        bbox.expand(Math3D::Vector3(values[k],values[k+1],values[k+2]));
+    for(int i=0;i<numPoints;i++) {
+        minValue = Min(minValue,SemanticReconstr[i].tsdf);
+        maxValue = Max(maxValue,SemanticReconstr[i].tsdf);
+        bbox.expand(Math3D::Vector3(SemanticReconstr[i].position[0],SemanticReconstr[i].position[1],SemanticReconstr[i].position[2]));
     }
-    printf("Read %d points with distance in range [%g,%g]\n",numPoints,minValue,maxValue);
-    printf("   x range [%g,%g]\n",bbox.bmin.x,bbox.bmax.x);
-    printf("   y range [%g,%g]\n",bbox.bmin.y,bbox.bmax.y);
-    printf("   z range [%g,%g]\n",bbox.bmin.z,bbox.bmax.z);
+    // printf("Read %d points with distance in range [%g,%g]\n",numPoints,minValue,maxValue);
+    // printf("   x range [%g,%g]\n",bbox.bmin.x,bbox.bmax.x);
+    // printf("   y range [%g,%g]\n",bbox.bmin.y,bbox.bmax.y);
+    // printf("   z range [%g,%g]\n",bbox.bmin.z,bbox.bmax.z);
     float truncation_distance = TRUNCATION_DISTANCE;
     if(TRUNCATION_DISTANCE < 0) {
         //auto-detect truncation distance
         truncation_distance = Max(-minValue,maxValue)*0.99;
         printf("Auto-detected truncation distance %g\n",truncation_distance);
     }
-    printf("Using cell size %g\n",CELL_SIZE);
+    // printf("Using cell size %g\n",CELL_SIZE);
     Geometry::SparseTSDFReconstruction tsdf(Math3D::Vector3(CELL_SIZE),truncation_distance);
     tsdf.tsdf.defaultValue[0] = truncation_distance;
-    k=0;
     Math3D::Vector3 ofs(CELL_SIZE*0.5);
-    for(int i=0;i<numPoints;i++,k+=4) {
-        tsdf.tsdf.SetValue(Math3D::Vector3(values[k],values[k+1],values[k+2])+ofs,values[k+3]);
+    for(int i=0;i<numPoints;i++) {
+        tsdf.tsdf.SetValue(Math3D::Vector3(SemanticReconstr[i].position[0],SemanticReconstr[i].position[1],SemanticReconstr[i].position[2])+ofs,SemanticReconstr[i].tsdf);
     }
 
-    printf("Extracting mesh\n");
     Meshing::TriMesh mesh;
     tsdf.ExtractMesh(mesh);
-    std::cout<<"Before Merge: vertsSize: "<<mesh.verts.size()<<std::endl;
-    std::cout<<"Before Merge: trisSize: "<<mesh.tris.size()<<std::endl;
-
-    MergeVertices(mesh, 0.05);
-
+    // std::cout<<"Before Merge: trisSize: "<<mesh.tris.size()<<std::endl;
+    // MergeVertices(mesh, 0.05);
     int vertsSize = mesh.verts.size();
     int trisSize = mesh.tris.size();
-
-    std::cout<<"vertsSize: "<<vertsSize<<std::endl;
     std::cout<<"trisSize: "<<trisSize<<std::endl;
-    const auto end = GetTimestamp<std::chrono::milliseconds>();
+    const auto end = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
     std::cout<<"mesh processing time: "<<end-st<<" ms"<<std::endl;
-
-    const auto st_msg = GetTimestamp<std::chrono::milliseconds>();  
     shape_msgs::Mesh::Ptr mMeshMsg = boost::make_shared<shape_msgs::Mesh>();
     // geometry_msgs/Point[] 
     mMeshMsg->vertices.resize(vertsSize);
-
-    // // // shape_msgs/MeshTriangle[] 
+    // shape_msgs/MeshTriangle[] 
     mMeshMsg->triangles.resize(trisSize);
-    
 
     for(int i = 0; i < vertsSize; i++){
         mMeshMsg->vertices[i].x = mesh.verts[i].x;
@@ -195,22 +178,12 @@ void SyncSubsriber::tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg)
         // std::cout<<mesh.tris[i].a<<std::endl;
     }
     meshPub.publish(mMeshMsg);
-    // Eigen::Isometry3d pose;
-    // pose = Eigen::AngleAxisd(0, Eigen::Vector3d::UnitY()); // rotate along X axis by 45 degrees
-    // pose.translation() = Eigen::Vector3d( 0, 0, 0 ); // translate x,y,z
-    // Publish arrow vector of pose
-    visual_tools_->publishMesh(pose, *mMeshMsg, rviz_visual_tools::ORANGE, 1, "mesh", 1); // rviz_visual_tools::TRANSLUCENT_LIGHT
-
-    const auto end_msg = GetTimestamp<std::chrono::milliseconds>();  
-    std::cout<<"Maker msg processing time: "<<end_msg-st_msg<<" ms"<<std::endl;
-
-
+    visual_tools_->publishMesh(T_ws, *mMeshMsg, rviz_visual_tools::ORANGE, 1, "mesh", 1); // rviz_visual_tools::TRANSLUCENT_LIGHT
     // Don't forget to trigger the publisher!
     visual_tools_->trigger();
 }
 
-
-void SyncSubsriber::SyncSubsriber::reconstTimerCallback(const ros::TimerEvent&)
+void SyncSubscriber::SyncSubscriber::reconstTimerCallback(const ros::TimerEvent&)
 {
     static unsigned int last_query_time = 0;
     static size_t last_query_amount     = 0;
@@ -237,57 +210,51 @@ void SyncSubsriber::SyncSubsriber::reconstTimerCallback(const ros::TimerEvent&)
                     z_off + z_range[1]};
     }
 
-    const auto st          = GetTimestamp<std::chrono::milliseconds>(); // nsec
+    const auto st          = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
     auto mSemanticReconstr           = my_sys->query_tsdf(volumn);
-    const auto end                   = GetTimestamp<std::chrono::milliseconds>();
+    const auto end                   = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
     last_query_time                  = end - st;
     last_query_amount                = mSemanticReconstr.size();
     std::cout << "Last queried %lu voxels " << last_query_amount << ", took " << last_query_time
                 << " ms" << std::endl;
-    int size = last_query_amount * sizeof(VoxelSpatialTSDF);
-    mReconstrMsg->data.resize(size);
-    std::memcpy(&(mReconstrMsg->data[0]),
-                (char*)mSemanticReconstr.data(),
-                last_query_amount * sizeof(VoxelSpatialTSDF));
-
-    tsdfCb(mReconstrMsg);
+    tsdfCb(mSemanticReconstr);
 
 }
 
-void SyncSubsriber::poseTimerCallback(const ros::TimerEvent&)
+void SyncSubscriber::poseTimerCallback(const ros::TimerEvent&)
 {
     static tf2_ros::TransformBroadcaster mTfSlam;
     static ros::Time stamp;
-    u_int64_t t_query    = GetTimestamp<std::chrono::milliseconds>();
-    stamp.sec            = t_query / 1000;                 // s
-    stamp.nsec           = (t_query % 1000) * 1000 * 1000; // ns
-    SE3<float> mSlamPose = my_sys->query_camera_pose(t_query);
-    // pubPose(stamp, mSlamPose, mTfSlam);
-    tf2::Transform tf2_trans;
-    tf2::Transform tf2_trans_inv;
+    u_int64_t t_query = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
+      SE3<float> mSlamPose = my_sys->query_camera_pose(t_query);
 
-    Eigen::Quaternion<float> R = mSlamPose.GetR();
-    Eigen::Matrix<float, 3, 1> T = mSlamPose.GetT();
+      Eigen::Quaternion<float> R = mSlamPose.GetR();
+      Eigen::Matrix<float, 3, 1> T = mSlamPose.GetT();
+      // std::cout<<"Queried pose at "<<t_query<<std::endl;
+      // std::cout<<"Rotation: "<<R.x()<<", "<< R.y()<<", "<< R.z()<<", "<<R.w()<<", "<<std::endl;
+      // std::cout<<"Translation: "<<T.x()<<", "<< T.y()<<", "<< T.z()<<", "<<std::endl;
 
-    tf2_trans.setRotation(tf2::Quaternion(R.x(), R.y(), R.z(), R.w()));
-    tf2_trans.setOrigin(tf2::Vector3(T.x(), T.y(), T.z()));
+      tf2::Transform tf2_trans;
+      tf2::Transform tf2_trans_inv;
+      tf2_trans.setRotation(tf2::Quaternion(R.x(), R.y(), R.z(), R.w()));
+      tf2_trans.setOrigin(tf2::Vector3(T.x(), T.y(), T.z()));
 
-    tf2_trans_inv = tf2_trans.inverse();
+      stamp.sec  = t_query / 1000; //s
+      stamp.nsec = (t_query % 1000) * 1000 * 1000; //ns
+      transformStamped.header.stamp = stamp;
+      transformStamped.header.frame_id = "slam";
+      transformStamped.child_frame_id = "zed";
+      tf2_trans_inv = tf2_trans.inverse();
+      tf2::Quaternion q = tf2_trans_inv.getRotation();
+      transformStamped.transform.rotation.x = q.x();
+      transformStamped.transform.rotation.y = q.y();
+      transformStamped.transform.rotation.z = q.z();
+      transformStamped.transform.rotation.w = q.w();
 
-    transformStamped.header.stamp    = stamp;
-    transformStamped.header.frame_id = "slam";
-    transformStamped.child_frame_id  = "zed";
-
-    tf2::Quaternion q                     = tf2_trans_inv.getRotation();
-    transformStamped.transform.rotation.x = q.x();
-    transformStamped.transform.rotation.y = q.y();
-    transformStamped.transform.rotation.z = q.z();
-    transformStamped.transform.rotation.w = q.w();
-
-    tf2::Vector3 t                           = tf2_trans_inv.getOrigin();
-    transformStamped.transform.translation.x = t[0];
-    transformStamped.transform.translation.y = t[1];
-    transformStamped.transform.translation.z = t[2];
-
-    mTfSlam.sendTransform(transformStamped);
+      tf2::Vector3 t = tf2_trans_inv.getOrigin();
+      transformStamped.transform.translation.x = t[0];
+      transformStamped.transform.translation.y = t[1];
+      transformStamped.transform.translation.z = t[2];
+      
+      mTfSlam.sendTransform(transformStamped);
 }

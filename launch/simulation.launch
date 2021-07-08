@@ -1,15 +1,16 @@
 <launch>
     <node pkg="tf2_ros" type="static_transform_publisher" name="word_slam" args="0 0 0  0.5, -0.5, 0.5, -0.5  world slam" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="zed_robot" args="0 0 0  0.5, -0.5, 0.5, 0.5  zed robot" />
 
-    <node pkg="disinfslam" type="simulate_disinf_slam" name="simulate_disinf_slam" output="screen" >
+    <node pkg="disinfslam" type="ros_offline_orb3" name="ros_offline_orb3" output="screen" launch-prefix="gdb -ex run --args"  >
         <param name="model_path" value="/home/yu/tools/ht_lt.pt" />
-        <param name="calib_path " value="$(find disinfslam)/configs/simulation.yaml" />
-        <param name="orb_vocab_path" value="/home/yu/Downloads/orb_vocab/orb_vocab.dbow2" />
+        <param name="calib_path " value="$(find disinfslam)/configs/zed_28498913_orb3.yaml" />
+        <param name="orb_vocab_path" value="/home/yu/git_ws/ORB_SLAM3/Vocabulary/ORBvoc.txt" />
         <param name="renderer" type="bool" value="false" />
         <param name="use_mask" type="bool" value="false" />
         <param name="bbox_xy" type="double" value="8.0" />
-        <remap from="/stereoLeft" to="/zed2/zed_node/left/image_rect_color" />
-        <remap from="/stereoRight" to="/zed2/zed_node/right/image_rect_color" />
+        <remap from="/stereoLeft" to="/zed2/zed_node/left/image_raw_color" />
+        <remap from="/stereoRight" to="/zed2/zed_node/right/image_raw_color" />
         <remap from="/depth" to="/camera/aligned_depth_to_color/image_raw" />
         <remap from="/rgbImg" to="/camera/color/image_raw" />
 

@@ -55,10 +55,10 @@ using namespace std;
 
 #define CELL_SIZE 0.05
 #define TRUNCATION_DISTANCE -0.1
-class SyncSubsriber
+class SyncSubscriber
 {
 public:
-    SyncSubsriber();
+    SyncSubscriber();
     void stereoCb(const ImageConstPtr& stereoLeft, const ImageConstPtr& stereoRight);
     void stereoCb(const ImageConstPtr& stereoLeft, const ImageConstPtr& stereoRight, const ImageConstPtr& maskLeft);
 
@@ -67,7 +67,7 @@ public:
 
     void reconstTimerCallback(const ros::TimerEvent&);
     void poseTimerCallback(const ros::TimerEvent&);
-    void tsdfCb(const std_msgs::Float32MultiArray::Ptr& msg);
+    void tsdfCb(std::vector<VoxelSpatialTSDF> & SemanticReconstr);
 
 private:
     ros::NodeHandle nh_;
@@ -80,6 +80,8 @@ private:
     // ros::Publisher mPubTsdfLocal;
     geometry_msgs::TransformStamped transformStamped;
     std_msgs::Float32MultiArray::Ptr mReconstrMsg;
+    geometry_msgs::Pose T_ws;
+
     // initialize slam
     std::shared_ptr<DISINFSystem> my_sys;
     // message_filters::Subscriber<sensor_msgs::Image> sub_1_;
