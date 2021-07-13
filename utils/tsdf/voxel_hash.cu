@@ -4,6 +4,17 @@
 #include "utils/cuda/errors.cuh"
 #include "utils/tsdf/voxel_hash.cuh"
 
+/*
+Matrix == Matrix does not work with CUDA
+*/
+__device__ bool eq(const Eigen::Matrix<short, 3, 1>& a, const Eigen::Matrix<short, 3, 1>& b) {
+  return (
+    a[0] == b[0] &&
+    a[1] == b[1] &&
+    a[2] == b[2]
+  );
+}
+
 __global__ static void reset_locks_kernel(int* locks, int num_locks) {
   const int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < num_locks) {
@@ -50,7 +61,7 @@ __device__ void VoxelHashTable::Allocate(const Eigen::Matrix<short, 3, 1>& block
 #pragma unroll
   for (int i = 0; i < NUM_ENTRY_PER_BUCKET; ++i) {
     const VoxelBlock& block = hash_table_[entry_idx + i];
-    if (block.position == block_pos && block.idx >= 0) {
+    if (eq(block.position, block_pos) && block.idx >=0) {
       return;
     }
   }
@@ -59,7 +70,7 @@ __device__ void VoxelHashTable::Allocate(const Eigen::Matrix<short, 3, 1>& block
   while (hash_table_[entry_idx_last].offset) {
     entry_idx_last = (entry_idx_last + hash_table_[entry_idx_last].offset) & ENTRY_MASK;
     const VoxelBlock& block = hash_table_[entry_idx_last];
-    if (block.position == block_pos && block.idx >= 0) {
+    if (eq(block.position, block_pos) && block.idx >= 0) {
       return;
     }
   }
@@ -114,7 +125,7 @@ __device__ void VoxelHashTable::Delete(const Eigen::Matrix<short, 3, 1>& block_p
 #pragma unroll
   for (int i = 0; i < NUM_ENTRY_PER_BUCKET - 1; ++i) {
     VoxelBlock& block = hash_table_[entry_idx + i];
-    if (block.position == block_pos && block.idx >= 0) {
+    if (eq(block.position, block_pos) && block.idx >= 0) {
       mem.ReleaseBlock(block.idx);
       block.offset = 0;
       block.idx = -1;
@@ -124,7 +135,7 @@ __device__ void VoxelHashTable::Delete(const Eigen::Matrix<short, 3, 1>& block_p
   // special handling for list head
   unsigned int entry_idx_last = entry_idx + NUM_ENTRY_PER_BUCKET - 1;
   VoxelBlock& block_head = hash_table_[entry_idx_last];
-  if (block_head.position == block_pos && block_head.idx >= 0) {
+  if (eq(block_head.position, block_pos) && block_head.idx >= 0) {
     if (atomicExch(&bucket_locks_[bucket_idx], LOCKED) == FREE) {
       const unsigned int entry_idx_next = (entry_idx_last + block_head.offset) & ENTRY_MASK;
       VoxelBlock& block_next = hash_table_[entry_idx_next];
@@ -143,7 +154,7 @@ __device__ void VoxelHashTable::Delete(const Eigen::Matrix<short, 3, 1>& block_p
     VoxelBlock& block_last = hash_table_[entry_idx_last];
     const unsigned int entry_idx_curr = (entry_idx_last + block_last.offset) & ENTRY_MASK;
     VoxelBlock& block_curr = hash_table_[entry_idx_curr];
-    if (block_curr.position == block_pos && block_curr.idx >= 0) {
+    if (eq(block_curr.position, block_pos) && block_curr.idx >= 0) {
       if (atomicExch(&bucket_locks_[bucket_idx], LOCKED) == FREE) {  // lock original bucket
         // check if reaches tail
         block_last.offset = block_curr.offset ? block_last.offset + block_curr.offset : 0;
