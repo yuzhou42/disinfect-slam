@@ -46,3 +46,6 @@ __pycache__/
 
 # third party
 third_party/libtorch
+
+# IDEs
+.vscode
