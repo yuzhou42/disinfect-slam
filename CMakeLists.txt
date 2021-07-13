@@ -1,12 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(disinfslam LANGUAGES CXX C CUDA)
-
-IF(NOT CMAKE_BUILD_TYPE)
-  SET(CMAKE_BUILD_TYPE Debug)
-ENDIF()
-
-set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
+set(CMAKE_CUDA_COMPILER /usr/local/cuda-11.4/bin/nvcc)
 set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -expt-relaxed-constexpr")
@@ -14,7 +8,24 @@ set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -G")
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 set(CMAKE_CUDA_ARCHITECTURES 61 72 75)
 
-SET(KLAMPT_ROOT ../../../Klampt CACHE PATH "Klampt root directory")
+project(disinfslam LANGUAGES CXX C CUDA)
+
+IF(NOT CMAKE_BUILD_TYPE)
+  SET(CMAKE_BUILD_TYPE Debug)
+ENDIF()
+
+# set(CMAKE_CUDA_COMPILER /usr/local/cuda-11.4/bin/nvcc)
+# set(CMAKE_CUDA_STANDARD 14)
+# set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+# set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -expt-relaxed-constexpr")
+# set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -G")
+# set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+# set(CMAKE_CUDA_ARCHITECTURES 61 72 75)
+
+SET(KLAMPT_ROOT "$ENV{HOME}/Klampt" CACHE PATH "Klampt root directory")
+if ( "${KLAMPT_ROOT}" )
+  SET(KLAMT_ROOT "${KLAMT_ROOT}")
+endif()
 SET (CMAKE_MODULE_PATH "${KLAMPT_ROOT}/CMakeModules")
 MESSAGE(STATUS "Looking for FindKlampt.cmake in ${CMAKE_MODULE_PATH}")
 # COMPILER SETTINGS (default: Release) and flags
@@ -50,7 +61,7 @@ find_package(glfw3 REQUIRED)
 find_package(GLUT REQUIRED)
 find_package(OpenGL REQUIRED)
 # Slam
-find_package(Eigen3 3.3.8 EXACT REQUIRED)
+find_package(Eigen3 3.3.8 REQUIRED)
 # find_package(openvslam REQUIRED)
 find_package(Pangolin REQUIRED) # TODO(alvin): to be completely replaced by Dear ImGUI
 find_package(OpenCV EXACT 3.2.0)
@@ -81,7 +92,10 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall  -O2 -march=native")
 
 catkin_package()
 
-set(ORB_DIR "/home/yu/git_ws/ORB_SLAM3")
+set(ORB_DIR "$ENV{HOME}/ORB_SLAM3")
+if ( "${ORB_DIR}" )
+    set(ORB_DIR "${ORB_DIR}")
+endif()
 
 include_directories(
     ${CMAKE_SOURCE_DIR}

@@ -6,14 +6,17 @@ components of this module is in charge for SLAM and 3D semmantic reconstruction.
 ## Dependancy
 * Build System
     * C++17
-    * CMake >= 3.18
+    * CMake >= 3.18  
+      1. `pip install --upgrade cmake`
+      2. `source ~/.bashrc`
     * CUDA >= 9.0
+      1. `sudo apt install nvidia-cuda-toolkit`
 * Externel Libraries
-    * [OpenVSLAM](https://github.com/xdspacelab/openvslam)
+    * ~~[OpenVSLAM](https://github.com/xdspacelab/openvslam)
       (follow the
       [official installation guide](https://openvslam.readthedocs.io/en/master/installation.html)
       but with
-      [this custom branch](https://github.com/alvinsunyixiao/openvslam/tree/system_inherit))
+      [this custom branch](https://github.com/alvinsunyixiao/openvslam/tree/system_inherit))~~
     * [ZED SDK](https://www.stereolabs.com/developers/release/) (optional)
 
 ## Note
@@ -65,7 +68,7 @@ This section is still WIP
 ### setup
 - add libtorch
 ```
-ln -s /path_to_torchlib thrid_party/libtorch
+ln -s /path_to_torchlib third_party/libtorch
 ```
 - setup dependencies
 ```
