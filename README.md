@@ -75,7 +75,9 @@ ln -s /path_to_torchlib third_party/libtorch
 sudo apt-get install ros-noetic-eigen-stl-containers
 sudo apt-get install ros-noetic-graph-msgs
 ```
-- set model_path/calib_path/orb_vocab_path in launch/disinfslam.launch
+- set model_path/calib_path/orb_vocab_path in launch/disinfslam.launch  
+
+- we are only building the tsdf example, so comment the other examples out of `CMakeLists.txt`
 
 - compile
 ```bash
