@@ -3,7 +3,7 @@
 #include <thread>
 
 // #include <openvslam/system.h>
-#include <popl.hpp>
+// #include <popl.hpp>
 #include <spdlog/spdlog.h>
 #include <yaml-cpp/yaml.h>
 

@@ -134,8 +134,8 @@ add_subdirectory(modules)
 
 if (TORCH_FOUND)
     add_subdirectory(segmentation)
-    add_subdirectory(disinfect_slam)
 endif ()
+add_subdirectory(disinfect_slam)
 add_subdirectory(examples)
 
 # -------------------------------------------------------------------- #
