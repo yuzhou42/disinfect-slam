@@ -39,8 +39,8 @@ SyncSubscriber::SyncSubscriber()
     sub_imu = nh_.subscribe("/zed2/zed_node/imu/data", 10, &ImuGrabber::GrabImu, this->mpImuGb.get()); 
     sub_img_left = nh_.subscribe("/zed2/zed_node/left_raw/image_raw_color", 5, &ImageGrabber::GrabImageLeft, this->mpIgb.get() );
     sub_img_right = nh_.subscribe("/zed2/zed_node/right_raw/image_raw_color", 5, &ImageGrabber::GrabImageRight, this->mpIgb.get());
-    // sub_img_depth = nh_.subscribe("/camera/aligned_depth_to_color/image_raw", 5, &ImageGrabber::GrabImageDepth, this->mpIgb.get() );
-    // sub_img_rgb = nh_.subscribe("/camera/color/image_raw", 5, &ImageGrabber::GrabImageRgb, this->mpIgb.get());
+    sub_img_depth = nh_.subscribe("/camera/aligned_depth_to_color/image_raw", 5, &ImageGrabber::GrabImageDepth, this->mpIgb.get() );
+    sub_img_rgb = nh_.subscribe("/camera/color/image_raw", 5, &ImageGrabber::GrabImageRgb, this->mpIgb.get());
     // publishers
     // mPubTsdfGlobal = nh_.advertise<std_msgs::Float32MultiArray>("/tsdf_global", 4);
     // mPubTsdfLocal  = nh_.advertise<std_msgs::Float32MultiArray>("/tsdf_local", 4);
@@ -58,8 +58,8 @@ SyncSubscriber::SyncSubscriber()
     // sync2_stereo_.reset(new Sync2(MySyncPolicy2(10), stereoLeft, stereoRight));
     // sync2_stereo_->registerCallback(boost::bind(&SyncSubscriber::stereoCb, this, _1, _2));
 
-    // reconstTimer = nh_.createTimer(ros::Duration(0.2), &SyncSubscriber::reconstTimerCallback, this);
-    // poseTimer    = nh_.createTimer(ros::Duration(0.05), &SyncSubscriber::poseTimerCallback, this);
+    reconstTimer = nh_.createTimer(ros::Duration(0.2), &SyncSubscriber::reconstTimerCallback, this);
+    poseTimer    = nh_.createTimer(ros::Duration(0.05), &SyncSubscriber::poseTimerCallback, this);
 
     // ROS_INFO_STREAM(calib_path);
 
@@ -214,7 +214,7 @@ void SyncSubscriber::slamTh()
           }
         }
         mpImuGb->mBufMutex.unlock();
-        std::cout<<vImuMeas.size()<<std::endl;
+        // std::cout<<vImuMeas.size()<<std::endl;
         my_sys->feed_stereo_IMU(imLeft, imRight, tImLeft, vImuMeas);
       }
       else if(mSensor == ORB_SLAM3::System::STEREO)

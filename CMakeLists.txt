@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-set(CMAKE_CUDA_COMPILER /usr/local/cuda-11.4/bin/nvcc)
+set(CMAKE_CUDA_COMPILER /usr/local/cuda-11/bin/nvcc)
 set(CMAKE_CUDA_STANDARD 14)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -expt-relaxed-constexpr")
@@ -61,11 +61,11 @@ find_package(glfw3 REQUIRED)
 find_package(GLUT REQUIRED)
 find_package(OpenGL REQUIRED)
 # Slam
-find_package(Eigen3 3.3.8 REQUIRED)
+find_package(Eigen3 EXACT 3.3.91)
 # find_package(openvslam REQUIRED)
 find_package(Pangolin REQUIRED) # TODO(alvin): to be completely replaced by Dear ImGUI
-find_package(OpenCV EXACT 3.2.0)
-find_package(yaml-cpp EXACT 0.6.3)
+find_package(OpenCV REQUIRED)
+find_package(yaml-cpp REQUIRED)
 # Zed SDK (optional)
 find_package(ZED 3 REQUIRED)
 # Camera SDKs
