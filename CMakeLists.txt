@@ -92,10 +92,15 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall  -O2 -march=native")
 
 catkin_package()
 
-set(ORB_DIR "$ENV{HOME}/ORB_SLAM3")
-if ( "${ORB_DIR}" )
-    set(ORB_DIR "${ORB_DIR}")
-endif()
+SET(GIT_WS "$ENV{HOME}/git_ws")
+
+If ( "${ORB_DIR}" )
+    SET(ORB_DIR "${ORB_DIR}")
+ELSEIF(EXISTS "${GIT_WS}")
+    SET(ORB_DIR "${GIT_WS}/ORB_SLAM3")
+ELSE()
+    SET(ORB_DIR "$ENV{HOME}/ORB_SLAM3")
+ENDIF()
 
 include_directories(
     ${CMAKE_SOURCE_DIR}
