@@ -2,11 +2,14 @@
     <node pkg="tf2_ros" type="static_transform_publisher" name="word_slam" args="0 0 0  0.5, -0.5, 0.5, -0.5  world slam" />
     <node pkg="tf2_ros" type="static_transform_publisher" name="zed_robot" args="0 0 0  0.5, -0.5, 0.5, 0.5  zed robot" />
 
-    <node pkg="disinfslam" type="ros_offline_orb3" name="ros_offline_orb3" output="screen" launch-prefix="gdb -ex run --args"    >
+    <arg name="prefix" default="" />
+    <arg name="orb-dir" default="$(env HOME)/ORB_SLAM3" />
+
+    <node pkg="disinfslam" type="ros_offline_orb3" name="ros_offline_orb3" output="screen" launch-prefix="$(arg prefix)"    >
         <param name="model_path" value="/home/yu/tools/ht_lt.pt" />
         <param name="calib_path " value="$(find disinfslam)/configs/zed_28498913_orb3.yaml" />
-        <param name="orb_vocab_path" value="/home/yu/git_ws/ORB_SLAM3/Vocabulary/ORBvoc.txt" />
-        <param name="renderer" type="bool" value="true" />
+        <param name="orb_vocab_path" value="$(arg orb-dir)/Vocabulary/ORBvoc.txt" />
+        <param name="renderer" type="bool" value="false" />
         <param name="use_mask" type="bool" value="false" />
         <param name="bbox_xy" type="double" value="8.0" />
         <param name="sensor" type="int" value="4" />
@@ -18,5 +21,6 @@
     </node>
 </launch>
 
-
-<!-- launch-prefix="gdb -ex run -args" -->
+<!-- cuda-memcheck -\-log-file /home/motion/disinfect/cuda.log -->
+<!-- cuda-gdb -->
+<!-- gdb -ex run -\-args -->
