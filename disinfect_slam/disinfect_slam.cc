@@ -97,6 +97,12 @@ void DISINFSystem::feed_stereo_IMU(const cv::Mat& img_left,
    
 }
 
+/**
+ * @brief Obtains camera pose at tiemstamp
+ * 
+ * @param timestamp ms
+ * @return SE3<float> 
+ */
 SE3<float> DISINFSystem::query_camera_pose(const int64_t timestamp)
 {
     return this->camera_pose_manager_->query_pose(timestamp);

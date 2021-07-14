@@ -62,16 +62,17 @@ using namespace std;
 #define CELL_SIZE 0.05
 #define TRUNCATION_DISTANCE -0.1
 
-class ImuGrabber
-{
-public:
-    ImuGrabber(){
-        imuBuf = queue<sensor_msgs::ImuConstPtr>();
-        std::cout<<"initialize imu grabber"<<std::endl;
-    };
-    void GrabImu(const sensor_msgs::ImuConstPtr &imu_msg);
-    queue<sensor_msgs::ImuConstPtr> imuBuf;
-    std::mutex mBufMutex;
+class ImuGrabber {
+ public:
+  ImuGrabber() {
+    imuBuf = queue<sensor_msgs::ImuConstPtr>();
+    std::cout << "initialize imu grabber" << std::endl;
+  };
+
+  void GrabImu(const sensor_msgs::ImuConstPtr& imu_msg);
+
+  queue<sensor_msgs::ImuConstPtr> imuBuf;
+  std::mutex mBufMutex;
 };
 
 class ImageGrabber
@@ -147,6 +148,8 @@ private:
     boost::shared_ptr<Sync3> sync3_depth_;
 
     image_transport::SubscriberFilter stereoLeft, stereoRight, depth, rgbImg, maskLeft, maskDepth;
+    
+    int64_t tLastUpdate; // Last updated ros time, ns
     ros::Timer reconstTimer;
     ros::Timer poseTimer;
 

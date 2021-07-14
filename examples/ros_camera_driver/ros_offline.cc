@@ -156,6 +156,8 @@ void SyncSubscriber::slamTh()
       tImLeft = mpIgb->imgLeftBuf.front()->header.stamp.toSec();
       tImRight = mpIgb->imgRightBuf.front()->header.stamp.toSec();
 
+      tLastUpdate = (int64_t) tImLeft * 1e6;
+
       mpIgb->mBufMutexRight.lock();
       while((tImLeft-tImRight)>maxTimeDiff && mpIgb->imgRightBuf.size()>1)
       {
@@ -360,42 +362,44 @@ void SyncSubscriber::reconstTimerCallback(const ros::TimerEvent&)
 
 }
 
-void SyncSubscriber::poseTimerCallback(const ros::TimerEvent&)
-{
-    static tf2_ros::TransformBroadcaster mTfSlam;
-    static ros::Time stamp;
-    u_int64_t t_query = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
-      SE3<float> mSlamPose = my_sys->query_camera_pose(t_query);
+void SyncSubscriber::poseTimerCallback(const ros::TimerEvent&) {
+  static tf2_ros::TransformBroadcaster mTfSlam;
+  static ros::Time stamp;
 
-      Eigen::Quaternion<float> R = mSlamPose.GetR();
-      Eigen::Matrix<float, 3, 1> T = mSlamPose.GetT();
-      // std::cout<<"Queried pose at "<<t_query<<std::endl;
-      // std::cout<<"Rotation: "<<R.x()<<", "<< R.y()<<", "<< R.z()<<", "<<R.w()<<", "<<std::endl;
-      // std::cout<<"Translation: "<<T.x()<<", "<< T.y()<<", "<< T.z()<<", "<<std::endl;
+  u_int64_t t_query = tLastUpdate;
+  SE3<float> mSlamPose = my_sys->query_camera_pose(t_query * 1e3);
 
-      tf2::Transform tf2_trans;
-      tf2::Transform tf2_trans_inv;
-      tf2_trans.setRotation(tf2::Quaternion(R.x(), R.y(), R.z(), R.w()));
-      tf2_trans.setOrigin(tf2::Vector3(T.x(), T.y(), T.z()));
+  Eigen::Quaternion<float> R = mSlamPose.GetR();
+  Eigen::Matrix<float, 3, 1> T = mSlamPose.GetT();
+  // std::cout<<"Queried pose at "<<t_query<<std::endl;
+  // std::cout<<"Rotation: "<<R.x()<<", "<< R.y()<<", "<< R.z()<<", "<<R.w()<<", "<<std::endl;
+  // std::cout<<"Translation: "<<T.x()<<", "<< T.y()<<", "<< T.z()<<", "<<std::endl;
 
-      stamp.sec  = t_query / 1000; //s
-      stamp.nsec = (t_query % 1000) * 1000 * 1000; //ns
-      transformStamped.header.stamp = stamp;
-      transformStamped.header.frame_id = "slam";
-      transformStamped.child_frame_id = "zed";
-      tf2_trans_inv = tf2_trans.inverse();
-      tf2::Quaternion q = tf2_trans_inv.getRotation();
-      transformStamped.transform.rotation.x = q.x();
-      transformStamped.transform.rotation.y = q.y();
-      transformStamped.transform.rotation.z = q.z();
-      transformStamped.transform.rotation.w = q.w();
+  tf2::Transform tf2_trans;
+  tf2::Transform tf2_trans_inv;
+  tf2_trans.setRotation(tf2::Quaternion(R.x(), R.y(), R.z(), R.w()));
+  tf2_trans.setOrigin(tf2::Vector3(T.x(), T.y(), T.z()));
 
-      tf2::Vector3 t = tf2_trans_inv.getOrigin();
-      transformStamped.transform.translation.x = t[0];
-      transformStamped.transform.translation.y = t[1];
-      transformStamped.transform.translation.z = t[2];
-      
-      mTfSlam.sendTransform(transformStamped);
+  u_int64_t t_publish = (int64_t) GetSystemTimestamp<std::chrono::nanoseconds>();
+  stamp.sec = t_publish / 1e6;
+  stamp.nsec = t_publish;
+
+  transformStamped.header.stamp = stamp;
+  transformStamped.header.frame_id = "slam";
+  transformStamped.child_frame_id = "zed";
+  tf2_trans_inv = tf2_trans.inverse();
+  tf2::Quaternion q = tf2_trans_inv.getRotation();
+  transformStamped.transform.rotation.x = q.x();
+  transformStamped.transform.rotation.y = q.y();
+  transformStamped.transform.rotation.z = q.z();
+  transformStamped.transform.rotation.w = q.w();
+
+  tf2::Vector3 t = tf2_trans_inv.getOrigin();
+  transformStamped.transform.translation.x = t[0];
+  transformStamped.transform.translation.y = t[1];
+  transformStamped.transform.translation.z = t[2];
+
+  mTfSlam.sendTransform(transformStamped);
 }
 
 void ImageGrabber::GrabImageLeft(const sensor_msgs::ImageConstPtr &img_msg)
@@ -457,8 +461,6 @@ cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg, string
 
 void ImuGrabber::GrabImu(const sensor_msgs::ImuConstPtr &imu_msg)
 {
-  // std::cout<<"got imu"<<std::endl;
-
   mBufMutex.lock();
   imuBuf.push(imu_msg);
   mBufMutex.unlock();
