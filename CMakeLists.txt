@@ -32,12 +32,14 @@ MESSAGE(STATUS "Looking for FindKlampt.cmake in ${CMAKE_MODULE_PATH}")
 INCLUDE(CompilerSettings)
 FIND_PACKAGE(Klampt REQUIRED)
 ADD_DEFINITIONS(${KLAMPT_DEFINITIONS})
-INCLUDE_DIRECTORIES(${KLAMPT_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(SYSTEM ${KLAMPT_INCLUDE_DIRS})
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # set(CMAKE_PREFIX_PATH "/home/yu/.local2")
+
+SET(OpenGL_GL_PREFERENCE "GLVND")
 
 find_package(catkin REQUIRED COMPONENTS
     roscpp
@@ -61,7 +63,7 @@ find_package(glfw3 REQUIRED)
 find_package(GLUT REQUIRED)
 find_package(OpenGL REQUIRED)
 # Slam
-find_package(Eigen3 EXACT 3.3.91)
+find_package(Eigen3 EXACT 3.3.9)
 # find_package(openvslam REQUIRED)
 find_package(Pangolin REQUIRED) # TODO(alvin): to be completely replaced by Dear ImGUI
 find_package(OpenCV REQUIRED)

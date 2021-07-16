@@ -11,13 +11,15 @@ components of this module is in charge for SLAM and 3D semmantic reconstruction.
       2. `source ~/.bashrc`
     * CUDA >= 9.0
       1. `sudo apt install nvidia-cuda-toolkit`
-* Externel Libraries
+* External Libraries
     * ~~[OpenVSLAM](https://github.com/xdspacelab/openvslam)
       (follow the
       [official installation guide](https://openvslam.readthedocs.io/en/master/installation.html)
       but with
       [this custom branch](https://github.com/alvinsunyixiao/openvslam/tree/system_inherit))~~
     * [ZED SDK](https://www.stereolabs.com/developers/release/) (optional)
+    * [glfw3](https://github.com/glfw/glfw) (alternatively, `sudo apt-get install libglfw3-dev`)
+    * [realsense2](https://github.com/IntelRealSense/librealsense/blob/master/doc/distribution_linux.md)
 
 ## Note
 
@@ -103,3 +105,14 @@ rviz
 - Add rotation arthimetics (e.g. rotation matrices interpolation)
 - Use pre-processer to allow online.cc to compile without libtorch
 - TensorRT for saving GPU memory
+
+1. Install Nvidia drivers, CUDA (11.x), nvcc
+2. Install ROS
+3. Install Klampt
+4. Install ORB_SLAM3
+5. `pip install opencv-contrib-python`
+6. `sudo apt-get install ros-noetic-rviz-visual-tools`
+7. Copy to ws TSDF2Mesh
+8. Copy to ws disinfect_slam
+9. Install librealsense2
+10. Install ZED3 (or remove dependencies)
