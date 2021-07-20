@@ -17,6 +17,9 @@ SyncSubscriber::SyncSubscriber()
     nh_.getParam("/query_bbox", query_bbox);
     spdlog::info("query bbox size: x: [{},{}],  y: [{},{}],  z: [{},{}]", 
     query_bbox[0], query_bbox[1], query_bbox[2], query_bbox[3],query_bbox[4],query_bbox[5]);
+    bool run_reconstruction;
+    nh_.getParam("/run_reconstruction", run_reconstruction);
+
     switch (sensor)
     {
     case 1:
@@ -28,14 +31,6 @@ SyncSubscriber::SyncSubscriber()
       spdlog::info("Stereo - inertial");
       break;
     }
-    // image_transport::ImageTransport it(nh_);
-    // stereoLeft.subscribe(it, "/stereoLeft", 3);
-    // stereoRight.subscribe(it, "/stereoRight", 3);
-    // depth.subscribe(it, "/depth", 3);
-    // rgbImg.subscribe(it, "/rgbImg", 3);
-    // maskLeft.subscribe(it, "/maskLeft", 3);
-    // maskDepth.subscribe(it, "/maskDepth", 3);
-
     mpImuGb = std::make_shared<ImuGrabber>();
     mpIgb = std::make_shared<ImageGrabber>();
     // mpImuGb = new ImuGrabber();
@@ -43,8 +38,21 @@ SyncSubscriber::SyncSubscriber()
     sub_imu = nh_.subscribe("/zed2/zed_node/imu/data", 10, &ImuGrabber::GrabImu, this->mpImuGb.get()); 
     sub_img_left = nh_.subscribe("/zed2/zed_node/left_raw/image_raw_color", 5, &ImageGrabber::GrabImageLeft, this->mpIgb.get() );
     sub_img_right = nh_.subscribe("/zed2/zed_node/right_raw/image_raw_color", 5, &ImageGrabber::GrabImageRight, this->mpIgb.get());
-    sub_img_depth = nh_.subscribe("/camera/aligned_depth_to_color/image_raw", 5, &ImageGrabber::GrabImageDepth, this->mpIgb.get() );
-    sub_img_rgb = nh_.subscribe("/camera/color/image_raw", 5, &ImageGrabber::GrabImageRgb, this->mpIgb.get());
+    if(run_reconstruction){
+      sub_img_depth = nh_.subscribe("/camera/aligned_depth_to_color/image_raw", 5, &ImageGrabber::GrabImageDepth, this->mpIgb.get() );
+      sub_img_rgb = nh_.subscribe("/camera/color/image_raw", 5, &ImageGrabber::GrabImageRgb, this->mpIgb.get());
+      reconstTimer = nh_.createTimer(ros::Duration(0.2), &SyncSubscriber::reconstTimerCallback, this);
+    }
+
+    poseTimer    = nh_.createTimer(ros::Duration(0.05), &SyncSubscriber::poseTimerCallback, this);
+        // image_transport::ImageTransport it(nh_);
+    // stereoLeft.subscribe(it, "/stereoLeft", 3);
+    // stereoRight.subscribe(it, "/stereoRight", 3);
+    // depth.subscribe(it, "/depth", 3);
+    // rgbImg.subscribe(it, "/rgbImg", 3);
+    // maskLeft.subscribe(it, "/maskLeft", 3);
+    // maskDepth.subscribe(it, "/maskDepth", 3);
+
     // publishers
     // mPubTsdfGlobal = nh_.advertise<std_msgs::Float32MultiArray>("/tsdf_global", 4);
     // mPubTsdfLocal  = nh_.advertise<std_msgs::Float32MultiArray>("/tsdf_local", 4);
@@ -61,9 +69,6 @@ SyncSubscriber::SyncSubscriber()
 
     // sync2_stereo_.reset(new Sync2(MySyncPolicy2(10), stereoLeft, stereoRight));
     // sync2_stereo_->registerCallback(boost::bind(&SyncSubscriber::stereoCb, this, _1, _2));
-
-    reconstTimer = nh_.createTimer(ros::Duration(0.2), &SyncSubscriber::reconstTimerCallback, this);
-    poseTimer    = nh_.createTimer(ros::Duration(0.05), &SyncSubscriber::poseTimerCallback, this);
 
     doRectify(calib_path, &M1l, &M1r, &M2l, &M2r);
     my_sys   = std::make_shared<DISINFSystem>(calib_path, orb_vocab_path, model_path, mSensor, pangolin_view);
