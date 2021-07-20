@@ -1,0 +1,9 @@
+pangolin_view: false
+global_mesh: true
+use_mask: false
+query_bbox: [-8,8,-8,8,-8,8]
+sensor: 4
+debug_level: 2
+do_rectify: true
+truncation_distance: 1.0
+cell_size: 0.05

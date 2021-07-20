@@ -59,9 +59,6 @@ using namespace sensor_msgs;
 using namespace message_filters;
 using namespace std;
 
-#define CELL_SIZE 0.05
-#define TRUNCATION_DISTANCE -0.1
-
 class ImuGrabber {
  public:
   ImuGrabber() {
@@ -120,9 +117,12 @@ private:
     std::string model_path, calib_path, orb_vocab_path;
     bool use_mask;
     bool global_mesh;
-    bool renderFlag;
+    bool pangolin_view;
     bool do_rectify;
-    double bbox_xy;
+    int sensor, debug_out;
+    float truncation_distance;
+    float cell_size;
+    std::vector<float> query_bbox;
     ros::Publisher mPubTsdfGlobal;
     ros::Publisher mPubTsdfLocal;
     geometry_msgs::TransformStamped transformStamped;

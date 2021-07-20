@@ -2,28 +2,32 @@
 
 SyncSubscriber::SyncSubscriber()
 {
+    nh_.getParam("/debug_level", debug_out);  // 1: debug, 2: info
+    spdlog::set_level(spdlog::level::level_enum(debug_out)); 
     nh_.getParam("/ros_offline_orb3/model_path", model_path);
     nh_.getParam("/ros_offline_orb3/calib_path", calib_path);
     nh_.getParam("/ros_offline_orb3/orb_vocab_path", orb_vocab_path);
-    nh_.param("/ros_offline_orb3/bbox_xy", bbox_xy, 4.0);
-    nh_.param("/ros_offline_orb3/renderer", renderFlag, false);
-    nh_.param("/ros_offline_orb3/use_mask", use_mask, false);
-    nh_.param("/ros_offline_orb3/global_mesh", global_mesh, true);
-    nh_.param("/ros_offline_orb3/do_rectify", do_rectify, true);
-    int sensor;
-    nh_.param("/ros_offline_orb3/sensor", sensor, 4); 
+    nh_.getParam("/pangolin_view", pangolin_view);
+    nh_.getParam("/use_mask", use_mask);
+    nh_.getParam("/global_mesh", global_mesh);
+    nh_.getParam("/do_rectify", do_rectify);
+    nh_.getParam("/truncation_distance", truncation_distance);
+    nh_.getParam("/cell_size", cell_size);
+    nh_.getParam("/sensor", sensor); // 0: mono, 1: stereo, 2: rgbd, 3: imu_mono, 4: imu_stereo
+    nh_.getParam("/query_bbox", query_bbox);
+    spdlog::info("query bbox size: x: [{},{}],  y: [{},{}],  z: [{},{}]", 
+    query_bbox[0], query_bbox[1], query_bbox[2], query_bbox[3],query_bbox[4],query_bbox[5]);
     switch (sensor)
     {
     case 1:
       mSensor = ORB_SLAM3::System::STEREO;
-      std::cout << "Stereo" << std::endl;
+      spdlog::info("Stereo");
       break;
     case 4:
       mSensor = ORB_SLAM3::System::IMU_STEREO;
-      std::cout << "Stereo - inertial " << std::endl;
+      spdlog::info("Stereo - inertial");
       break;
     }
-        // enum eSensor{MONOCULAR=0,STEREO=1,RGBD=2,IMU_MONOCULAR=3,ORB_SLAM3::System::eSensor::IMU_STEREO=4
     // image_transport::ImageTransport it(nh_);
     // stereoLeft.subscribe(it, "/stereoLeft", 3);
     // stereoRight.subscribe(it, "/stereoRight", 3);
@@ -61,13 +65,8 @@ SyncSubscriber::SyncSubscriber()
     reconstTimer = nh_.createTimer(ros::Duration(0.2), &SyncSubscriber::reconstTimerCallback, this);
     poseTimer    = nh_.createTimer(ros::Duration(0.05), &SyncSubscriber::poseTimerCallback, this);
 
-    // ROS_INFO_STREAM(calib_path);
-
-    // auto cfg = GetAndSetConfig(calib_path);
     doRectify(calib_path, &M1l, &M1r, &M2l, &M2r);
-    my_sys   = std::make_shared<DISINFSystem>(calib_path, orb_vocab_path, model_path, mSensor, renderFlag);
-    // mpSLAM = std::make_shared<ORB_SLAM3::System>(orb_vocab_path, calib_path,
-    //                      ORB_SLAM3::System::ORB_SLAM3::System::IMU_STEREO, renderFlag);
+    my_sys   = std::make_shared<DISINFSystem>(calib_path, orb_vocab_path, model_path, mSensor, pangolin_view);
 
     mReconstrMsg.reset(new std_msgs::Float32MultiArray);
     visual_tools_.reset(new rviz_visual_tools::RvizVisualTools("world","/mesh_visual", nh_));
@@ -84,7 +83,7 @@ SyncSubscriber::SyncSubscriber()
         T_ws.position.z = transformStampedInit.transform.translation.z;
 
         T_ws.orientation =  transformStampedInit.transform.rotation;
-        std::cout<<"Init world slam transform!"<<std::endl;
+        spdlog::info("Init world slam transform!");
         }
         catch (tf2::TransformException &ex) {
         ROS_WARN("%s",ex.what());   
@@ -96,8 +95,9 @@ SyncSubscriber::SyncSubscriber()
 
 void SyncSubscriber::reconstTh()
 {
-  const double maxTimeDiff = 0.01;
-
+  spdlog::info("Start reconstruction thread");
+  const double maxTimeDiff = 0.05;
+  
   while(true){
     cv::Mat imDepth, imRgb;
     double tlmDepth = 0, tlmRgb = 0;
@@ -124,7 +124,7 @@ void SyncSubscriber::reconstTh()
 
       if((tlmDepth-tlmRgb)>maxTimeDiff || (tlmRgb-tlmDepth)>maxTimeDiff)
       {
-        std::cout << "big time difference" << std::endl;
+        spdlog::debug("big time difference");
         continue;
       }
 
@@ -134,7 +134,7 @@ void SyncSubscriber::reconstTh()
       mpIgb->mBufMutexDepth.unlock();
 
       mpIgb->mBufMutexRgb.lock();
-      imRgb = mpIgb->GetImage(mpIgb->imgRgbBuf.front());
+      imRgb = mpIgb->GetImage(mpIgb->imgRgbBuf.front(),"rgb8");
       mpIgb->imgRgbBuf.pop();
       mpIgb->mBufMutexRgb.unlock();
 
@@ -145,8 +145,9 @@ void SyncSubscriber::reconstTh()
 
 void SyncSubscriber::slamTh()
 {
+  spdlog::info("Start SLAM thread");
   const double maxTimeDiff = 0.01;
-//   std::thread t_slam([&](){
+
   while(1)
   {
     cv::Mat imLeft, imRight;
@@ -176,7 +177,7 @@ void SyncSubscriber::slamTh()
 
       if((tImLeft-tImRight)>maxTimeDiff || (tImRight-tImLeft)>maxTimeDiff)
       {
-        // std::cout << "big time difference" << std::endl;
+        spdlog::info("big time difference for stereo");
         continue;
       }
 
@@ -208,7 +209,6 @@ void SyncSubscriber::slamTh()
           while(!mpImuGb->imuBuf.empty() && mpImuGb->imuBuf.front()->header.stamp.toSec()<=tImLeft)
           {
             double t = mpImuGb->imuBuf.front()->header.stamp.toSec();
-            // std::cout<<"t_imu: "<<t<<std::endl;
             cv::Point3f acc(mpImuGb->imuBuf.front()->linear_acceleration.x, mpImuGb->imuBuf.front()->linear_acceleration.y, mpImuGb->imuBuf.front()->linear_acceleration.z);
             cv::Point3f gyr(mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z);
             vImuMeas.push_back(ORB_SLAM3::IMU::Point(acc,gyr,t));
@@ -276,16 +276,15 @@ void SyncSubscriber::tsdfCb(std::vector<VoxelSpatialTSDF> & SemanticReconstr)
     // printf("   x range [%g,%g]\n",bbox.bmin.x,bbox.bmax.x);
     // printf("   y range [%g,%g]\n",bbox.bmin.y,bbox.bmax.y);
     // printf("   z range [%g,%g]\n",bbox.bmin.z,bbox.bmax.z);
-    float truncation_distance = TRUNCATION_DISTANCE;
-    if(TRUNCATION_DISTANCE < 0) {
+    if(truncation_distance < 0) {
         //auto-detect truncation distance
         truncation_distance = Max(-minValue,maxValue)*0.99;
-        printf("Auto-detected truncation distance %g\n",truncation_distance);
+        spdlog::debug("Auto-detected truncation distance {}", truncation_distance);
     }
-    // printf("Using cell size %g\n",CELL_SIZE);
-    Geometry::SparseTSDFReconstruction tsdf(Math3D::Vector3(CELL_SIZE),truncation_distance);
+    // printf("Using cell size %g\n",cell_size);
+    Geometry::SparseTSDFReconstruction tsdf(Math3D::Vector3(cell_size),truncation_distance);
     tsdf.tsdf.defaultValue[0] = truncation_distance;
-    Math3D::Vector3 ofs(CELL_SIZE*0.5);
+    Math3D::Vector3 ofs(cell_size*0.5);
     for(int i=0;i<numPoints;i++) {
         tsdf.tsdf.SetValue(Math3D::Vector3(SemanticReconstr[i].position[0],SemanticReconstr[i].position[1],SemanticReconstr[i].position[2])+ofs,SemanticReconstr[i].tsdf);
     }
@@ -296,9 +295,9 @@ void SyncSubscriber::tsdfCb(std::vector<VoxelSpatialTSDF> & SemanticReconstr)
     // MergeVertices(mesh, 0.05);
     int vertsSize = mesh.verts.size();
     int trisSize = mesh.tris.size();
-    std::cout<<"trisSize: "<<trisSize<<std::endl;
+    spdlog::debug("triSize: {}", trisSize);
     const auto end = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
-    std::cout<<"mesh processing time: "<<end-st<<" ms"<<std::endl;
+    spdlog::debug("mesh processing time: {} ms", end-st);
     shape_msgs::Mesh::Ptr mMeshMsg = boost::make_shared<shape_msgs::Mesh>();
     // geometry_msgs/Point[] 
     mMeshMsg->vertices.resize(vertsSize);
@@ -328,12 +327,8 @@ void SyncSubscriber::reconstTimerCallback(const ros::TimerEvent&)
 {
     static unsigned int last_query_time = 0;
     static size_t last_query_amount     = 0;
-    // static float bbox = 4.0;
-    static float x_range[2]           = {-bbox_xy, bbox_xy};
-    static float y_range[2]           = {-4, 2};
-    static float z_range[2]           = {-bbox_xy, bbox_xy};
     static BoundingCube<float> volumn = {
-        x_range[0], x_range[1], y_range[0], y_range[1], z_range[0], z_range[1]};
+        query_bbox[0], query_bbox[1], query_bbox[2], query_bbox[3],query_bbox[4],query_bbox[5]};
 
     if (!global_mesh)
     {
@@ -341,14 +336,13 @@ void SyncSubscriber::reconstTimerCallback(const ros::TimerEvent&)
         float x_off   = transformStamped.transform.translation.x,
               y_off   = transformStamped.transform.translation.y,
               z_off   = transformStamped.transform.translation.z;
-        std::cout << "x_off: " << x_off << "  y_off: " << y_off << "  z_off: " << z_off
-                  << std::endl;
-        volumn = {x_off + x_range[0],
-                    x_off + x_range[1],
-                    y_off + y_range[0],
-                    y_off + y_range[1],
-                    z_off + z_range[0],
-                    z_off + z_range[1]};
+        spdlog::info("x_off: {}, y_off: {}, z_off: {}", x_off, y_off, z_off);
+        volumn = {x_off + query_bbox[0],
+                    x_off + query_bbox[1],
+                    y_off + query_bbox[2],
+                    y_off + query_bbox[3],
+                    z_off + query_bbox[4],
+                    z_off + query_bbox[5]};
     }
 
     const auto st          = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
@@ -356,8 +350,7 @@ void SyncSubscriber::reconstTimerCallback(const ros::TimerEvent&)
     const auto end                   = (int64_t)(GetSystemTimestamp<std::chrono::milliseconds>());
     last_query_time                  = end - st;
     last_query_amount                = mSemanticReconstr.size();
-    std::cout << "Last queried %lu voxels " << last_query_amount << ", took " << last_query_time
-                << " ms" << std::endl;
+    spdlog::debug("Last queried {} voxels, took {} ms", last_query_amount, last_query_time);
     tsdfCb(mSemanticReconstr);
 
 }
@@ -461,6 +454,8 @@ cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg, string
 
 void ImuGrabber::GrabImu(const sensor_msgs::ImuConstPtr &imu_msg)
 {
+  // spdlog::debug("got imu");
+
   mBufMutex.lock();
   imuBuf.push(imu_msg);
   mBufMutex.unlock();
