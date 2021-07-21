@@ -47,16 +47,12 @@ class DISINFSystem {
   SE3<float> query_camera_pose(const int64_t timestamp);
 
   void run();
+
+ private:
   std::shared_ptr<ORB_SLAM3::System> SLAM_;
   std::shared_ptr<TSDFSystem> TSDF_;
   std::shared_ptr<pose_manager> camera_pose_manager_;
-
-
-
- private:
   // std::shared_ptr<inference_engine> SEG_;
   // std::shared_ptr<ImageRenderer> RENDERER_;
-
-
   float depthmap_factor_;
 };

@@ -226,17 +226,6 @@ void SyncSubscriber::slamTh()
       }
       else if(mSensor == ORB_SLAM3::System::STEREO)
         my_sys->feed_stereo(imLeft, imRight, tImLeft);
-        // my_sys->feed_stereo(imLeft, imRight, tImLeft, vImuMeas);
-
-      // Tcw = mpSLAM->TrackStereo(imLeft,imRight,tImLeft,vImuMeas);
-      // std::cout << "Tcw: " << Tcw << std::endl;
-      // if(!Tcw.empty()){
-      //   Eigen::Matrix<float, 4, 4> eigenT;
-      //   cv::cv2eigen(Tcw, eigenT);
-      //   // std::cout<<"eigenT: "<<eigenT<<std::endl;
-      //   const SE3<float> posecam_P_world(eigenT);
-      //   my_sys->camera_pose_manager_->register_valid_pose(tImLeft*1e3, posecam_P_world); //s to ms
-      // }
       
     //   geometry_msgs::PoseStamped pose;
     //   pose.header.stamp = ros::Time::now();
@@ -366,7 +355,7 @@ void SyncSubscriber::poseTimerCallback(const ros::TimerEvent&) {
 
   u_int64_t t_query = tLastUpdate;
   SE3<float> mSlamPose = my_sys->query_camera_pose(t_query * 1e3);
-
+  // SE3<float> mSlamPoseInv = mSlamPose.Inverse();
   Eigen::Quaternion<float> R = mSlamPose.GetR();
   Eigen::Matrix<float, 3, 1> T = mSlamPose.GetT();
   // std::cout<<"Queried pose at "<<t_query<<std::endl;
